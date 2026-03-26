@@ -1,106 +1,175 @@
 /**
- * Makes an image seamlessly tileable using the classic offset + center-blend technique.
+ * Makes an image seamlessly tileable using the alpha-gradient overlap technique.
  *
- * How it works:
- * 1. Shift the image by half its width and height (wrapping around)
- *    - This moves the original edges to the center of the image
- *    - The new edges come from the interior of the original (already continuous)
- * 2. Blend a diamond/cross gradient over the center seam area
- *    - This smoothly merges the old edges that are now in the center
- *    - Uses a cosine-based gradient for the smoothest possible transition
- * 3. Result: edges are guaranteed to match because they came from the original interior
+ * Based on the img2texture algorithm (MIT license, Artёm iG):
+ * 1. Take the right edge stripe of the image
+ * 2. Apply an alpha gradient (opaque→transparent from right to left)
+ * 3. Composite it over the LEFT side of the image
+ * 4. Crop off the right stripe — now left edge = right edge perfectly
+ * 5. Repeat for top/bottom edges
+ *
+ * The result is a slightly smaller image where opposite edges match
+ * perfectly because they are gradient-blended copies of each other.
  */
 
-export function makeSeamless(sourceImage: HTMLImageElement): Promise<HTMLImageElement> {
+export function makeSeamless(sourceImage: HTMLImageElement, overlap = 0.25): Promise<HTMLImageElement> {
   return new Promise((resolve) => {
     const w = sourceImage.naturalWidth || sourceImage.width;
     const h = sourceImage.naturalHeight || sourceImage.height;
-    const halfW = Math.floor(w / 2);
-    const halfH = Math.floor(h / 2);
 
-    // Step 1: Create the offset version (shift by half in both axes)
-    const offsetCanvas = document.createElement("canvas");
-    offsetCanvas.width = w;
-    offsetCanvas.height = h;
-    const offCtx = offsetCanvas.getContext("2d")!;
+    // Step 1: Make horizontal edges seamless
+    const hResult = makeSeamlessH(sourceImage, w, h, overlap);
 
-    // Draw 4 quadrants shifted
-    // Top-left gets bottom-right of original
-    offCtx.drawImage(sourceImage, halfW, halfH, w - halfW, h - halfH, 0, 0, w - halfW, h - halfH);
-    // Top-right gets bottom-left of original
-    offCtx.drawImage(sourceImage, 0, halfH, halfW, h - halfH, w - halfW, 0, halfW, h - halfH);
-    // Bottom-left gets top-right of original
-    offCtx.drawImage(sourceImage, halfW, 0, w - halfW, halfH, 0, h - halfH, w - halfW, halfH);
-    // Bottom-right gets top-left of original
-    offCtx.drawImage(sourceImage, 0, 0, halfW, halfH, w - halfW, h - halfH, halfW, halfH);
+    // Step 2: Make vertical edges seamless on the h-result
+    const newW = hResult.width;
+    const newH = hResult.height;
+    const vResult = makeSeamlessV(hResult, newW, newH, overlap);
 
-    // Step 2: Create the blended result
-    // We need to blend the original and offset images together
-    // The blend mask is strongest at the center (where the offset seams are)
-    // and weakest at the edges (where the offset image is clean)
-    const resultCanvas = document.createElement("canvas");
-    resultCanvas.width = w;
-    resultCanvas.height = h;
-    const resCtx = resultCanvas.getContext("2d")!;
-
-    // Get pixel data from both
-    const origCanvas = document.createElement("canvas");
-    origCanvas.width = w;
-    origCanvas.height = h;
-    const origCtx = origCanvas.getContext("2d")!;
-    origCtx.drawImage(sourceImage, 0, 0);
-
-    const origData = origCtx.getImageData(0, 0, w, h);
-    const offData = offCtx.getImageData(0, 0, w, h);
-    const resultData = resCtx.createImageData(w, h);
-
-    // Blend size — how wide the blend zone is (percentage of image)
-    const blendFraction = 0.25; // 25% from each side = 50% total blend zone in center
-    const blendW = Math.floor(w * blendFraction);
-    const blendH = Math.floor(h * blendFraction);
-
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const idx = (y * w + x) * 4;
-
-        // Calculate blend weight: how much of the ORIGINAL to use
-        // 1.0 = all original, 0.0 = all offset
-        // We want original in the center area, offset at the edges
-        // Actually reversed: offset image has seams at center, original has seams at edges
-        // We want: edges from offset (clean), center from original (clean)
-
-        // Distance from center as 0..1
-        const dx = Math.abs(x - halfW) / halfW; // 0 at center, 1 at edge
-        const dy = Math.abs(y - halfH) / halfH; // 0 at center, 1 at edge
-
-        // Blend factor: smooth transition
-        // At center (dx=0,dy=0): use original (factor=1)
-        // At edges (dx=1,dy=1): use offset (factor=0)
-        // Use smooth cosine interpolation for each axis
-        const fx = dx < (1 - blendFraction * 2) ? 1.0
-                 : dx > 1.0 ? 0.0
-                 : 0.5 + 0.5 * Math.cos(Math.PI * (dx - (1 - blendFraction * 2)) / (blendFraction * 2));
-
-        const fy = dy < (1 - blendFraction * 2) ? 1.0
-                 : dy > 1.0 ? 0.0
-                 : 0.5 + 0.5 * Math.cos(Math.PI * (dy - (1 - blendFraction * 2)) / (blendFraction * 2));
-
-        // Combine both axes — use minimum so corners blend properly
-        const factor = fx * fy;
-
-        // Blend pixels
-        resultData.data[idx]     = Math.round(origData.data[idx]     * factor + offData.data[idx]     * (1 - factor));
-        resultData.data[idx + 1] = Math.round(origData.data[idx + 1] * factor + offData.data[idx + 1] * (1 - factor));
-        resultData.data[idx + 2] = Math.round(origData.data[idx + 2] * factor + offData.data[idx + 2] * (1 - factor));
-        resultData.data[idx + 3] = 255;
-      }
-    }
-
-    resCtx.putImageData(resultData, 0, 0);
-
-    // Convert canvas to image
+    // Convert to HTMLImageElement
     const img = new Image();
     img.onload = () => resolve(img);
-    img.src = resultCanvas.toDataURL("image/png");
+    img.src = vResult.toDataURL("image/png");
   });
+}
+
+function makeSeamlessH(
+  source: HTMLImageElement | HTMLCanvasElement,
+  w: number,
+  h: number,
+  overlap: number
+): HTMLCanvasElement {
+  const stripeW = Math.floor(w * overlap);
+  if (stripeW < 1) return canvasFromSource(source, w, h);
+
+  // Draw source onto a canvas
+  const srcCanvas = canvasFromSource(source, w, h);
+  const srcCtx = srcCanvas.getContext("2d")!;
+  const srcData = srcCtx.getImageData(0, 0, w, h);
+
+  // Create the right stripe with alpha gradient
+  // The gradient goes: left side = transparent (0), right side = opaque (255)
+  // We paste this OVER the left side of the image
+  // This means: at the left edge of the stripe, original pixels show through
+  //             at the right edge of the stripe, the copied pixels dominate
+  // After cropping the right stripe off, left edge will match right edge
+  const resultCanvas = document.createElement("canvas");
+  const newW = w - stripeW;
+  resultCanvas.width = newW;
+  resultCanvas.height = h;
+  const resCtx = resultCanvas.getContext("2d")!;
+
+  // Start with the source image data (we'll only keep 0..newW)
+  const resultData = resCtx.createImageData(newW, h);
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < newW; x++) {
+      const dstIdx = (y * newW + x) * 4;
+      const srcIdx = (y * w + x) * 4;
+
+      // Base pixel from source
+      let r = srcData.data[srcIdx];
+      let g = srcData.data[srcIdx + 1];
+      let b = srcData.data[srcIdx + 2];
+
+      // If this pixel is within the stripe zone (0..stripeW), blend with right edge
+      if (x < stripeW) {
+        // Alpha: 0 at x=0 (keep original), 1 at x=stripeW-1 (use right-edge pixel)
+        // Actually reversed: right stripe pixel should be strong at LEFT edge
+        // so when we tile, the rightmost column of the cropped image matches
+        // the leftmost column because it's a blend of the same data
+
+        // Right edge stripe pixel: from (w - stripeW + x, y)
+        const rightX = w - stripeW + x;
+        const rightIdx = (y * w + rightX) * 4;
+        const rR = srcData.data[rightIdx];
+        const rG = srcData.data[rightIdx + 1];
+        const rB = srcData.data[rightIdx + 2];
+
+        // Alpha gradient: 1.0 at x=0 (use right stripe), 0.0 at x=stripeW (use original)
+        // This means at x=0, we see the right edge pixel (which will also be the
+        // pixel at position w-stripeW when tiled) — creating continuity
+        const alpha = 1.0 - (x / stripeW);
+
+        r = Math.round(rR * alpha + r * (1 - alpha));
+        g = Math.round(rG * alpha + g * (1 - alpha));
+        b = Math.round(rB * alpha + b * (1 - alpha));
+      }
+
+      resultData.data[dstIdx] = r;
+      resultData.data[dstIdx + 1] = g;
+      resultData.data[dstIdx + 2] = b;
+      resultData.data[dstIdx + 3] = 255;
+    }
+  }
+
+  resCtx.putImageData(resultData, 0, 0);
+  return resultCanvas;
+}
+
+function makeSeamlessV(
+  source: HTMLCanvasElement,
+  w: number,
+  h: number,
+  overlap: number
+): HTMLCanvasElement {
+  const stripeH = Math.floor(h * overlap);
+  if (stripeH < 1) return source;
+
+  const srcCtx = source.getContext("2d")!;
+  const srcData = srcCtx.getImageData(0, 0, w, h);
+
+  const newH = h - stripeH;
+  const resultCanvas = document.createElement("canvas");
+  resultCanvas.width = w;
+  resultCanvas.height = newH;
+  const resCtx = resultCanvas.getContext("2d")!;
+  const resultData = resCtx.createImageData(w, newH);
+
+  for (let y = 0; y < newH; y++) {
+    for (let x = 0; x < w; x++) {
+      const dstIdx = (y * w + x) * 4;
+      const srcIdx = (y * w + x) * 4;
+
+      let r = srcData.data[srcIdx];
+      let g = srcData.data[srcIdx + 1];
+      let b = srcData.data[srcIdx + 2];
+
+      // If within the top stripe zone, blend with bottom edge
+      if (y < stripeH) {
+        const bottomY = h - stripeH + y;
+        const bottomIdx = (bottomY * w + x) * 4;
+        const bR = srcData.data[bottomIdx];
+        const bG = srcData.data[bottomIdx + 1];
+        const bB = srcData.data[bottomIdx + 2];
+
+        // Alpha: 1.0 at y=0 (use bottom pixel), 0.0 at y=stripeH (use original)
+        const alpha = 1.0 - (y / stripeH);
+
+        r = Math.round(bR * alpha + r * (1 - alpha));
+        g = Math.round(bG * alpha + g * (1 - alpha));
+        b = Math.round(bB * alpha + b * (1 - alpha));
+      }
+
+      resultData.data[dstIdx] = r;
+      resultData.data[dstIdx + 1] = g;
+      resultData.data[dstIdx + 2] = b;
+      resultData.data[dstIdx + 3] = 255;
+    }
+  }
+
+  resCtx.putImageData(resultData, 0, 0);
+  return resultCanvas;
+}
+
+function canvasFromSource(
+  source: HTMLImageElement | HTMLCanvasElement,
+  w: number,
+  h: number
+): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d")!;
+  ctx.drawImage(source, 0, 0, w, h);
+  return canvas;
 }
