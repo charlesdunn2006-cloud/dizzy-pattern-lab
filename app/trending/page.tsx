@@ -62,7 +62,7 @@ function TrendingCard({
 }: {
   pattern: TrendingPattern;
   index: number;
-  onSelect: (prompt: string) => void;
+  onSelect: (pattern: TrendingPattern) => void;
   cachedImage: string | null;
   onImageLoaded: (id: string, thumbnail: string) => void;
   autoLoad: boolean;
@@ -111,7 +111,7 @@ function TrendingCard({
 
   return (
     <button
-      onClick={() => onSelect(pattern.prompt)}
+      onClick={() => onSelect(pattern)}
       style={{
         textAlign: "left",
         border: "1px solid var(--border)",
@@ -443,8 +443,13 @@ export default function TrendingPage() {
     [handleImageLoaded, advanceLoading]
   );
 
-  const handleSelect = (prompt: string) => {
-    sessionStorage.setItem("trending_prompt", prompt);
+  const handleSelect = (pattern: TrendingPattern) => {
+    sessionStorage.setItem("trending_prompt", pattern.prompt);
+    // If we have a cached image, pass it so the generator skips regeneration
+    const cachedImg = imageCache[pattern.id];
+    if (cachedImg) {
+      sessionStorage.setItem("trending_image", cachedImg);
+    }
     router.push("/");
   };
 
@@ -669,7 +674,7 @@ export default function TrendingPage() {
               key={pattern.id}
               pattern={pattern}
               index={index}
-              onSelect={handleSelect}
+              onSelect={(pattern) => handleSelect(pattern)}
               cachedImage={imageCache[pattern.id] || null}
               onImageLoaded={
                 isGeneratingAll ? handleImageLoadedAndAdvance : handleImageLoaded

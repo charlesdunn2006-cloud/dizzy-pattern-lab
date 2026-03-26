@@ -16,12 +16,22 @@ export default function PatternGenerator({ onPatternGenerated, onDescriptionChan
     onDescriptionChange?.(val);
   }, [onDescriptionChange]);
 
-  // Check for trending prompt passed via sessionStorage
+  // Check for trending prompt + optional pre-generated image via sessionStorage
   useEffect(() => {
     const trendingPrompt = sessionStorage.getItem("trending_prompt");
+    const trendingImage = sessionStorage.getItem("trending_image");
     if (trendingPrompt) {
       updateDescription(trendingPrompt);
       sessionStorage.removeItem("trending_prompt");
+    }
+    if (trendingImage) {
+      sessionStorage.removeItem("trending_image");
+      // Load the cached image directly — skip generation
+      const img = new Image();
+      img.onload = () => {
+        onPatternGenerated(img);
+      };
+      img.src = trendingImage;
     }
   }, []);
 
