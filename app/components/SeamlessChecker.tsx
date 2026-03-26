@@ -103,49 +103,36 @@ export default function SeamlessChecker({ patternImage, scale, rotation }: Props
 
     // Use requestAnimationFrame to avoid blocking UI
     requestAnimationFrame(() => {
-      // Create a canvas with the pattern at current scale/rotation
-      const tileSize = 512;
-      const canvas = document.createElement("canvas");
-      canvas.width = tileSize;
-      canvas.height = tileSize;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) { setIsChecking(false); return; }
-
       const sf = scale / 100;
-      const tileW = patternImage.width * sf;
-      const tileH = patternImage.height * sf;
+      const tileW = Math.round(patternImage.width * sf);
+      const tileH = Math.round(patternImage.height * sf);
+      if (tileW < 1 || tileH < 1) { setIsChecking(false); return; }
 
-      // Scale to fit the analysis canvas
-      const fitScale = Math.min(tileSize / tileW, tileSize / tileH);
-      const drawW = tileW * fitScale;
-      const drawH = tileH * fitScale;
-
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, tileSize, tileSize);
+      // Build the actual tile as it would appear when downloaded
+      const singleTile = document.createElement("canvas");
+      singleTile.width = tileW;
+      singleTile.height = tileH;
+      const stCtx = singleTile.getContext("2d");
+      if (!stCtx) { setIsChecking(false); return; }
 
       if (rotation !== 0) {
-        ctx.translate(tileSize / 2, tileSize / 2);
-        ctx.rotate((rotation * Math.PI) / 180);
-        ctx.translate(-tileSize / 2, -tileSize / 2);
-      }
-
-      // Draw pattern to fill the canvas
-      for (let y = 0; y < tileSize + drawH; y += drawH) {
-        for (let x = 0; x < tileSize + drawW; x += drawW) {
-          ctx.drawImage(patternImage, x, y, drawW, drawH);
+        stCtx.translate(tileW / 2, tileH / 2);
+        stCtx.rotate((rotation * Math.PI) / 180);
+        stCtx.translate(-tileW / 2, -tileH / 2);
+        // Draw larger to cover rotated area, then the canvas clips
+        const extra = Math.ceil(Math.max(tileW, tileH) * 0.5);
+        for (let y = -tileH - extra; y < tileH + extra; y += tileH) {
+          for (let x = -tileW - extra; x < tileW + extra; x += tileW) {
+            stCtx.drawImage(patternImage, x, y, tileW, tileH);
+          }
         }
+      } else {
+        stCtx.drawImage(patternImage, 0, 0, tileW, tileH);
       }
 
-      // Analyze a single tile
-      const singleTile = document.createElement("canvas");
-      singleTile.width = Math.round(drawW);
-      singleTile.height = Math.round(drawH);
-      const stCtx = singleTile.getContext("2d");
-      if (stCtx) {
-        stCtx.drawImage(patternImage, 0, 0, Math.round(drawW), Math.round(drawH));
-        const analysisResult = analyzeSeamlessness(singleTile);
-        setResult(analysisResult);
-      }
+      // Analyze the tile exactly as it will be tiled
+      const analysisResult = analyzeSeamlessness(singleTile);
+      setResult(analysisResult);
 
       setIsChecking(false);
       setShowTilePreview(true);
@@ -161,8 +148,30 @@ export default function SeamlessChecker({ patternImage, scale, rotation }: Props
 
     const previewSize = 420;
     const sf = scale / 100;
-    const tileW = (patternImage.width * sf);
-    const tileH = (patternImage.height * sf);
+    const tileW = Math.round(patternImage.width * sf);
+    const tileH = Math.round(patternImage.height * sf);
+    if (tileW < 1 || tileH < 1) return;
+
+    // First, build one tile with rotation baked in
+    const tileCanvas = document.createElement("canvas");
+    tileCanvas.width = tileW;
+    tileCanvas.height = tileH;
+    const tileCtx = tileCanvas.getContext("2d");
+    if (!tileCtx) return;
+
+    if (rotation !== 0) {
+      tileCtx.translate(tileW / 2, tileH / 2);
+      tileCtx.rotate((rotation * Math.PI) / 180);
+      tileCtx.translate(-tileW / 2, -tileH / 2);
+      const extra = Math.ceil(Math.max(tileW, tileH) * 0.5);
+      for (let y = -tileH - extra; y < tileH + extra; y += tileH) {
+        for (let x = -tileW - extra; x < tileW + extra; x += tileW) {
+          tileCtx.drawImage(patternImage, x, y, tileW, tileH);
+        }
+      }
+    } else {
+      tileCtx.drawImage(patternImage, 0, 0, tileW, tileH);
+    }
 
     // Scale tiles to fit 3x3 in the preview
     const gridScale = Math.min(previewSize / (tileW * 3), previewSize / (tileH * 3));
@@ -179,21 +188,14 @@ export default function SeamlessChecker({ patternImage, scale, rotation }: Props
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, totalW, totalH);
 
-    if (rotation !== 0) {
-      ctx.translate(totalW / 2, totalH / 2);
-      ctx.rotate((rotation * Math.PI) / 180);
-      ctx.translate(-totalW / 2, -totalH / 2);
-    }
-
-    // Draw 3x3 grid
+    // Draw 3x3 grid using the pre-rendered tile
     for (let row = 0; row < 3; row++) {
       for (let col = 0; col < 3; col++) {
-        ctx.drawImage(patternImage, col * drawW, row * drawH, drawW, drawH);
+        ctx.drawImage(tileCanvas, col * drawW, row * drawH, drawW, drawH);
       }
     }
 
     // Draw subtle grid lines to highlight seams
-    ctx.restore();
     ctx.strokeStyle = "rgba(255, 0, 0, 0.25)";
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 4]);

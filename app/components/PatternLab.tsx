@@ -10,6 +10,7 @@ import PatternControls from "./PatternControls";
 import PreviewCanvas from "./PreviewCanvas";
 import DownloadSection from "./DownloadSection";
 import SeamlessChecker from "./SeamlessChecker";
+import SeamlessMaker from "./SeamlessMaker";
 import Header from "./Header";
 
 type Tab = "generate" | "upload";
@@ -293,6 +294,14 @@ export default function PatternLab() {
               scale={scale} onScaleChange={setScale}
               rotation={rotation} onRotationChange={setRotation}
               isSeamlessWrap={selectedTemplate?.isSeamlessWrap ?? false}
+            />
+            <SeamlessMaker
+              patternImage={patternImage}
+              onImageProcessed={(img) => {
+                setPatternImage(img);
+                setOffsetX(0);
+                setOffsetY(0);
+              }}
             />
             <PreviewCanvas
               patternImage={patternImage} template={selectedTemplate}
