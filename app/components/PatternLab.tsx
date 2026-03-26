@@ -10,7 +10,6 @@ import PatternControls from "./PatternControls";
 import PreviewCanvas from "./PreviewCanvas";
 import DownloadSection from "./DownloadSection";
 import SeamlessChecker from "./SeamlessChecker";
-import SeamlessMaker from "./SeamlessMaker";
 import Header from "./Header";
 
 type Tab = "generate" | "upload";
@@ -29,7 +28,7 @@ export default function PatternLab() {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [projectName, setProjectName] = useState("");
   const [showSaveForm, setShowSaveForm] = useState(false);
-  const [originalImage, setOriginalImage] = useState<HTMLImageElement | null>(null);
+
 
   // Load project from sessionStorage (coming from /saved page)
   useEffect(() => {
@@ -55,7 +54,6 @@ export default function PatternLab() {
 
   const resetPattern = useCallback(() => {
     setPatternImage(null);
-    setOriginalImage(null);
     setPatternFileName("");
     setPatternDescription("");
     setSelectedTemplate(null);
@@ -296,24 +294,6 @@ export default function PatternLab() {
               scale={scale} onScaleChange={setScale}
               rotation={rotation} onRotationChange={setRotation}
               isSeamlessWrap={selectedTemplate?.isSeamlessWrap ?? false}
-            />
-            <SeamlessMaker
-              patternImage={patternImage}
-              hasOriginal={!!originalImage}
-              onImageProcessed={(img) => {
-                if (!originalImage) setOriginalImage(patternImage);
-                setPatternImage(img);
-                setOffsetX(0);
-                setOffsetY(0);
-              }}
-              onReset={() => {
-                if (originalImage) {
-                  setPatternImage(originalImage);
-                  setOriginalImage(null);
-                  setOffsetX(0);
-                  setOffsetY(0);
-                }
-              }}
             />
             <PreviewCanvas
               patternImage={patternImage} template={selectedTemplate}
