@@ -6,8 +6,8 @@ export const dynamic = "force-dynamic";
 async function waitForPrediction(
   id: string,
   token: string,
-  maxWait = 120000
-): Promise<{ output: string[] | null; error: string | null }> {
+  maxWait = 180000
+): Promise<{ output: string[] | string | null; error: string | null }> {
   const start = Date.now();
   while (Date.now() - start < maxWait) {
     const res = await fetch(`https://api.replicate.com/v1/predictions/${id}`, {
@@ -20,7 +20,7 @@ async function waitForPrediction(
     if (data.status === "failed" || data.status === "canceled") {
       return { output: null, error: data.error || "Prediction failed" };
     }
-    await new Promise((r) => setTimeout(r, 1000));
+    await new Promise((r) => setTimeout(r, 1500));
   }
   return { output: null, error: "Prediction timed out" };
 }
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Use Replicate's material_stable_diffusion (circular convolution = native seamless tiling)
+    // Use Replicate's seamless-texture model (Flux + seamless tiling LoRA)
     if (replicateToken) {
       const prompt = `${description.trim()}, seamless tileable wallpaper pattern, repeating surface design, clean shapes, bold colors, flat graphic illustration, print quality, high detail`;
 
@@ -50,15 +50,19 @@ export async function POST(request: Request) {
           Authorization: `Bearer ${replicateToken}`,
         },
         body: JSON.stringify({
-          // tommoore515/material_stable_diffusion — uses circular padding for true seamless tiling
-          version: "3b5c0242f8925a4ab6c79b4c51e9b4ce6374e9b07b5e8461d89e692fd0faa449",
+          // replicate/seamless-texture — Flux model with seamless tiling LoRA
+          version: "9a59c0dce189bfe8a7fcb379c497713500ff959652c4e7874023f15983dec839",
           input: {
             prompt,
-            width: 512,
-            height: 512,
+            model: "dev",
+            width: 1024,
+            height: 1024,
             num_outputs: 1,
-            num_inference_steps: 50,
-            guidance_scale: 7.5,
+            num_inference_steps: 28,
+            guidance_scale: 3,
+            output_format: "png",
+            output_quality: 95,
+            disable_safety_checker: true,
           },
         }),
       });
@@ -67,16 +71,21 @@ export async function POST(request: Request) {
         const prediction = await res.json();
         const result = await waitForPrediction(prediction.id, replicateToken);
 
-        if (result.output && result.output.length > 0) {
-          // Fetch the image URL and convert to base64
-          const imageUrl = result.output[0];
-          const imgRes = await fetch(imageUrl);
-          const buffer = await imgRes.arrayBuffer();
-          const b64 = Buffer.from(buffer).toString("base64");
-          return NextResponse.json({ image: b64 });
+        if (result.output) {
+          // Output can be a string URL or array of URLs
+          const imageUrl = Array.isArray(result.output) ? result.output[0] : result.output;
+          if (imageUrl && typeof imageUrl === "string") {
+            const imgRes = await fetch(imageUrl);
+            const buffer = await imgRes.arrayBuffer();
+            const b64 = Buffer.from(buffer).toString("base64");
+            return NextResponse.json({ image: b64 });
+          }
         }
 
         console.warn("Replicate failed:", result.error);
+      } else {
+        const errBody = await res.json().catch(() => ({}));
+        console.warn("Replicate request failed:", res.status, errBody);
       }
     }
 
