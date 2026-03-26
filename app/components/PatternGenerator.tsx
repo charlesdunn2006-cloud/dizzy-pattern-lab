@@ -24,41 +24,28 @@ export default function PatternGenerator({ onPatternGenerated, onDescriptionChan
       sessionStorage.removeItem("trending_prompt");
     }
   }, []);
-  const [apiKey, setApiKey] = useState("");
-  const [showApiKey, setShowApiKey] = useState(false);
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState("");
 
   const handleGenerate = useCallback(async () => {
     if (!description.trim()) { setError("Please describe your pattern first."); return; }
-    if (!apiKey.trim()) { setError("Please enter your OpenAI API key."); return; }
     setError("");
     setIsGenerating(true);
 
     try {
-      const response = await fetch("https://api.openai.com/v1/images/generations", {
+      const response = await fetch("/api/generate", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey.trim()}`,
-        },
-        body: JSON.stringify({
-          model: "dall-e-3",
-          prompt: `Create a seamless, tileable wallpaper pattern: ${description.trim()}. The pattern must tile perfectly with no visible seams when repeated. High resolution, print quality, 300 DPI aesthetic.`,
-          n: 1,
-          size: "1024x1024",
-          quality: "hd",
-          response_format: "b64_json",
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description: description.trim() }),
       });
 
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
-        throw new Error(err?.error?.message || `API error: ${response.status}`);
+        throw new Error(err?.error || `Server error: ${response.status}`);
       }
 
       const data = await response.json();
-      const b64 = data.data[0].b64_json;
       const img = new Image();
       img.onload = () => {
         onPatternGenerated(img);
@@ -68,12 +55,12 @@ export default function PatternGenerator({ onPatternGenerated, onDescriptionChan
         setError("Failed to load generated image.");
         setIsGenerating(false);
       };
-      img.src = `data:image/png;base64,${b64}`;
+      img.src = `data:image/png;base64,${data.image}`;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate pattern.");
       setIsGenerating(false);
     }
-  }, [description, apiKey, onPatternGenerated]);
+  }, [description, onPatternGenerated]);
 
   return (
     <div style={{ marginBottom: 36 }}>
@@ -121,48 +108,6 @@ export default function PatternGenerator({ onPatternGenerated, onDescriptionChan
             </button>
           ))}
         </div>
-      </div>
-
-      {/* API Key */}
-      <div style={{ marginBottom: 20 }}>
-        <label style={{
-          display: "block", fontSize: 10, fontWeight: 500, letterSpacing: "0.18em",
-          textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 8,
-        }}>
-          OpenAI API Key
-        </label>
-        <div style={{ display: "flex", gap: 8 }}>
-          <input
-            type={showApiKey ? "text" : "password"}
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder="sk-..."
-            style={{
-              flex: 1, padding: "10px 14px", border: "1px solid var(--border)",
-              background: "var(--bg-primary)", color: "var(--text-primary)", fontSize: 14,
-              fontFamily: "monospace", outline: "none",
-            }}
-          />
-          <button
-            onClick={() => setShowApiKey(!showApiKey)}
-            style={{
-              padding: "10px 14px", border: "1px solid var(--border)",
-              background: "var(--bg-primary)", color: "var(--text-muted)",
-              fontSize: 11, cursor: "pointer", letterSpacing: "0.08em",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {showApiKey ? "HIDE" : "SHOW"}
-          </button>
-        </div>
-        <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6, lineHeight: 1.5 }}>
-          Your key stays in your browser and is never stored or sent anywhere except OpenAI.
-          Get one at{" "}
-          <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer"
-            style={{ color: "var(--text-secondary)", textDecoration: "underline", textUnderlineOffset: 2 }}>
-            platform.openai.com
-          </a>
-        </p>
       </div>
 
       {/* Error */}

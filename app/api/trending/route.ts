@@ -61,12 +61,11 @@ function getCategoryColors(title: string, description: string): { category: stri
   return { category: "Design", colors: COLOR_PALETTES.abstract };
 }
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const apiKey = searchParams.get("key");
+export async function GET() {
+  const apiKey = process.env.OPENAI_API_KEY;
 
   if (!apiKey) {
-    return NextResponse.json({ error: "OpenAI API key required. Pass ?key=sk-..." }, { status: 400 });
+    return NextResponse.json({ error: "OpenAI API key not configured on the server." }, { status: 500 });
   }
 
   try {

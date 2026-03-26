@@ -309,8 +309,8 @@ export default function PatternLab() {
             Legal &amp; Intellectual Property
           </p>
           <p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.8, maxWidth: 560, margin: "0 auto" }}>
-            All processing happens locally in your browser. Your patterns are never uploaded or stored.
-            AI-generated patterns use your own OpenAI API key — we never see or store it.
+            Pattern previews and downloads are processed locally in your browser.
+            AI pattern generation is powered by DALL-E 3.
           </p>
         </div>
       </main>

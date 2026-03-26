@@ -11,8 +11,6 @@ export default function TrendingPage() {
   const [patterns, setPatterns] = useState<TrendingPattern[]>(TRENDING_PATTERNS);
   const [isLive, setIsLive] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [apiKey, setApiKey] = useState("");
-  const [showRefresh, setShowRefresh] = useState(true);
 
   // Check localStorage for cached trending data
   useEffect(() => {
@@ -20,27 +18,18 @@ export default function TrendingPage() {
     if (cached) {
       try {
         const data = JSON.parse(cached);
-        // Use cache if it's from this month
         if (data.month === currentMonth && data.patterns?.length > 0) {
           setPatterns(data.patterns);
           setIsLive(true);
-          setShowRefresh(false);
         }
       } catch { /* use static fallback */ }
     }
-    // Restore API key if saved
-    const savedKey = localStorage.getItem("openai_api_key");
-    if (savedKey) setApiKey(savedKey);
   }, [currentMonth]);
 
   const handleRefresh = useCallback(async () => {
-    if (!apiKey.trim()) return;
     setIsLoading(true);
-    // Save key for convenience
-    localStorage.setItem("openai_api_key", apiKey.trim());
-
     try {
-      const res = await fetch(`/api/trending?key=${encodeURIComponent(apiKey.trim())}`);
+      const res = await fetch("/api/trending");
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error || "Failed to fetch");
@@ -49,8 +38,6 @@ export default function TrendingPage() {
       if (data.patterns?.length > 0) {
         setPatterns(data.patterns);
         setIsLive(true);
-        setShowRefresh(false);
-        // Cache it
         localStorage.setItem("trending_cache", JSON.stringify(data));
       }
     } catch (err) {
@@ -58,7 +45,7 @@ export default function TrendingPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [apiKey]);
+  }, []);
 
   const handleSelect = (prompt: string) => {
     sessionStorage.setItem("trending_prompt", prompt);
@@ -146,65 +133,23 @@ export default function TrendingPage() {
           )}
         </div>
 
-        {/* Refresh section */}
-        {showRefresh && (
-          <div style={{
-            padding: "20px", marginBottom: 36, background: "#ffffff",
-            border: "1px solid var(--border)", textAlign: "center",
-          }}>
-            <p style={{
-              fontSize: 14, color: "var(--text-secondary)", marginBottom: 14,
-            }}>
-              Refresh with live AI-generated trends based on current search data
-            </p>
-            <div style={{ display: "flex", gap: 10, justifyContent: "center", maxWidth: 500, margin: "0 auto" }}>
-              <input
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="OpenAI API key (sk-...)"
-                style={{
-                  flex: 1, padding: "10px 14px", border: "1px solid var(--border)",
-                  background: "#ffffff", color: "var(--text-primary)", fontSize: 13,
-                  fontFamily: "monospace", outline: "none",
-                }}
-              />
-              <button
-                onClick={handleRefresh}
-                disabled={isLoading || !apiKey.trim()}
-                style={{
-                  padding: "10px 20px", border: "none",
-                  background: isLoading || !apiKey.trim() ? "var(--bg-card)" : "var(--accent)",
-                  color: isLoading || !apiKey.trim() ? "var(--text-muted)" : "#fff",
-                  fontSize: 12, fontWeight: 600, letterSpacing: "0.1em",
-                  cursor: isLoading || !apiKey.trim() ? "not-allowed" : "pointer",
-                  textTransform: "uppercase", whiteSpace: "nowrap",
-                }}
-              >
-                {isLoading ? "LOADING..." : "REFRESH TRENDS"}
-              </button>
-            </div>
-            <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
-              Uses GPT-4o-mini to generate fresh trending patterns. Your key is only stored locally.
-            </p>
-          </div>
-        )}
-
-        {/* Show refresh button if already live */}
-        {!showRefresh && (
-          <div style={{ textAlign: "center", marginBottom: 24 }}>
-            <button
-              onClick={() => setShowRefresh(true)}
-              style={{
-                background: "none", border: "none", color: "var(--text-muted)",
-                fontSize: 11, letterSpacing: "0.08em", cursor: "pointer",
-                textDecoration: "underline", textUnderlineOffset: 3,
-              }}
-            >
-              REFRESH TRENDS
-            </button>
-          </div>
-        )}
+        {/* Refresh button */}
+        <div style={{ textAlign: "center", marginBottom: 24 }}>
+          <button
+            onClick={handleRefresh}
+            disabled={isLoading}
+            style={{
+              padding: "10px 24px", border: "none",
+              background: isLoading ? "var(--bg-card)" : "var(--accent)",
+              color: isLoading ? "var(--text-muted)" : "#fff",
+              fontSize: 12, fontWeight: 600, letterSpacing: "0.1em",
+              cursor: isLoading ? "not-allowed" : "pointer",
+              textTransform: "uppercase",
+            }}
+          >
+            {isLoading ? "REFRESHING..." : "REFRESH TRENDS"}
+          </button>
+        </div>
 
         {/* Grid */}
         <div style={{
@@ -238,7 +183,6 @@ export default function TrendingPage() {
 
               {/* Content */}
               <div style={{ padding: "16px 20px", flex: 1 }}>
-                {/* Rank + Category */}
                 <div style={{
                   display: "flex", justifyContent: "space-between",
                   alignItems: "center", marginBottom: 8,
@@ -257,7 +201,6 @@ export default function TrendingPage() {
                   </span>
                 </div>
 
-                {/* Title */}
                 <h3 style={{
                   fontSize: 18, fontWeight: 500, color: "var(--text-primary)",
                   marginBottom: 6, lineHeight: 1.3,
@@ -266,7 +209,6 @@ export default function TrendingPage() {
                   {pattern.title}
                 </h3>
 
-                {/* Description */}
                 <p style={{
                   fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.5,
                   marginBottom: 12,
@@ -274,7 +216,6 @@ export default function TrendingPage() {
                   {pattern.description}
                 </p>
 
-                {/* Popularity bar */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <div style={{
                     flex: 1, height: 4, background: "var(--border)",
@@ -294,7 +235,6 @@ export default function TrendingPage() {
                 </div>
               </div>
 
-              {/* CTA */}
               <div style={{
                 padding: "12px 20px", borderTop: "1px solid var(--border)",
                 fontSize: 11, fontWeight: 600, letterSpacing: "0.1em",
