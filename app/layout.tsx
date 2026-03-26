@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Pattern Lab — Print-Ready Downloads",
+  title: "Dizzy with Excitement — AI Pattern Generator",
   description:
-    "Upload your seamless pattern and export it print-ready for any product — correctly sized at 300 DPI.",
+    "Describe your wallpaper pattern idea, set wall dimensions, and AI generates a seamless, print-ready design at 300 DPI.",
 };
 
 export default function RootLayout({

@@ -20,10 +20,45 @@ export const PRESET_TEMPLATES: ProductTemplate[] = [
   { id: "comp-notebook", name: "Composition Notebook", widthInches: 6.9, heightInches: 10, isSeamlessWrap: false },
 ];
 
+export interface TileSize {
+  label: string;
+  widthInches: number;
+  heightInches: number;
+}
+
+export const TILE_SIZES: TileSize[] = [
+  { label: '12" × 12"', widthInches: 12, heightInches: 12 },
+  { label: '18" × 18"', widthInches: 18, heightInches: 18 },
+  { label: '24" × 24"', widthInches: 24, heightInches: 24 },
+  { label: '36" × 36"', widthInches: 36, heightInches: 36 },
+];
+
+export const QUICK_IDEAS = [
+  "Tropical leaves with gold accents on a cream background",
+  "Art Deco geometric pattern in burgundy and gold",
+  "Delicate botanical vines with small flowers in soft pastels",
+  "Modern marbled texture in earthy terracotta and ochre",
+  "Mid-century modern abstract shapes in teal and mustard",
+  "Japanese wave pattern with cherry blossoms",
+  "Whimsical mushrooms and ferns in a cottagecore style",
+  "Minimalist line art florals in black on white",
+];
+
 export function inchesToPixels(inches: number): number {
   return Math.round(inches * DPI);
 }
 
 export function getEffectiveDpi(originalDpi: number, scalePercent: number): number {
   return Math.round(originalDpi * (100 / scalePercent));
+}
+
+export function calculateTiles(
+  wallWidthFeet: number, wallHeightFeet: number,
+  tileWidthInches: number, tileHeightInches: number
+): { tilesX: number; tilesY: number; total: number } {
+  const wallWidthInches = wallWidthFeet * 12;
+  const wallHeightInches = wallHeightFeet * 12;
+  const tilesX = Math.ceil(wallWidthInches / tileWidthInches);
+  const tilesY = Math.ceil(wallHeightInches / tileHeightInches);
+  return { tilesX, tilesY, total: tilesX * tilesY };
 }

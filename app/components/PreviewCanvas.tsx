@@ -12,6 +12,10 @@ interface Props {
 }
 
 const PREVIEW_MAX_WIDTH = 580;
+const PREVIEW_MAX_HEIGHT = 380;
+// Default preview: 24" x 24" tile at 300dpi when no template
+const DEFAULT_WIDTH_PX = 580;
+const DEFAULT_HEIGHT_PX = 580;
 
 export default function PreviewCanvas({ patternImage, template, scale, rotation, offsetX, offsetY, onOffsetChange }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -21,12 +25,20 @@ export default function PreviewCanvas({ patternImage, template, scale, rotation,
 
   const drawPreview = useCallback(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !patternImage || !template) return;
+    if (!canvas || !patternImage) return;
     const ctx = canvas.getContext("2d"); if (!ctx) return;
 
-    const targetW = inchesToPixels(template.widthInches);
-    const targetH = inchesToPixels(template.heightInches);
-    const previewScale = Math.min(PREVIEW_MAX_WIDTH / targetW, 380 / targetH, 1);
+    let targetW: number, targetH: number;
+    if (template) {
+      targetW = inchesToPixels(template.widthInches);
+      targetH = inchesToPixels(template.heightInches);
+    } else {
+      // No template — show a square preview of the tiled pattern
+      targetW = DEFAULT_WIDTH_PX;
+      targetH = DEFAULT_HEIGHT_PX;
+    }
+
+    const previewScale = Math.min(PREVIEW_MAX_WIDTH / targetW, PREVIEW_MAX_HEIGHT / targetH, 1);
     const canvasW = Math.round(targetW * previewScale);
     const canvasH = Math.round(targetH * previewScale);
     canvas.width = canvasW; canvas.height = canvasH;
@@ -79,17 +91,21 @@ export default function PreviewCanvas({ patternImage, template, scale, rotation,
     onOffsetChange(offsetStart.current.x + t.clientX - dragStart.current.x, offsetStart.current.y + t.clientY - dragStart.current.y);
   }, [onOffsetChange]);
 
-  if (!patternImage || !template) {
+  if (!patternImage) {
     return (
       <div style={{
         padding: "64px 20px", textAlign: "center", marginBottom: 36,
         background: "var(--bg-secondary)", color: "var(--text-muted)", fontSize: 14,
         fontStyle: "italic",
       }}>
-        Upload a pattern and select a product to see your preview here
+        Generate or upload a pattern to see your preview here
       </div>
     );
   }
+
+  const dimLabel = template
+    ? `${inchesToPixels(template.widthInches)} × ${inchesToPixels(template.heightInches)} px @ 300dpi`
+    : `${patternImage.width} × ${patternImage.height} px`;
 
   return (
     <div style={{ marginBottom: 36 }}>
@@ -109,7 +125,7 @@ export default function PreviewCanvas({ patternImage, template, scale, rotation,
           Preview is low resolution for speed — your downloaded file will be full quality.
         </p>
         <p style={{ fontSize: 12, color: "var(--text-muted)" }}>
-          Drag to pan &bull; {inchesToPixels(template.widthInches)} &times; {inchesToPixels(template.heightInches)} px @ 300dpi
+          Drag to pan &bull; {dimLabel}
         </p>
       </div>
     </div>

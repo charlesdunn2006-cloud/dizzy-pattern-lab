@@ -15,12 +15,6 @@ export default function TemplateSelector({ presets, customTemplates, selected, o
 
   return (
     <div style={{ marginBottom: 36 }}>
-      <p style={{
-        fontSize: 10, fontWeight: 500, letterSpacing: "0.18em", textTransform: "uppercase",
-        color: "var(--text-muted)", marginBottom: 14,
-      }}>
-        Choose a product template
-      </p>
       {!hasPattern && (
         <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 12, fontStyle: "italic" }}>
           Upload a pattern first

@@ -2,18 +2,18 @@
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap');
 
 :root {
-  --bg-primary: #ffffff;
-  --bg-secondary: #fafafa;
-  --bg-card: #f7f6f4;
-  --bg-warm: #f9f6f2;
+  --bg-primary: #e8f5e9;
+  --bg-secondary: #dcedc8;
+  --bg-card: #f1f8e9;
+  --bg-warm: #e8f5e9;
   --border: #e8e6e1;
   --border-light: #f0eeea;
   --text-primary: #1a1a1a;
   --text-secondary: #4a4a4a;
   --text-muted: #999999;
   --text-label: #777777;
-  --accent: #1a1a1a;
-  --accent-hover: #333333;
+  --accent: #14532d;
+  --accent-hover: #0f3d20;
   --warning: #b87333;
   --warning-bg: #fdf8f3;
   --success: #4a7a52;
