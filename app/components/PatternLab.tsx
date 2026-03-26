@@ -9,6 +9,7 @@ import WallDimensions from "./WallDimensions";
 import PatternControls from "./PatternControls";
 import PreviewCanvas from "./PreviewCanvas";
 import DownloadSection from "./DownloadSection";
+import SeamlessChecker from "./SeamlessChecker";
 import Header from "./Header";
 
 type Tab = "generate" | "upload";
@@ -293,6 +294,11 @@ export default function PatternLab() {
               scale={scale} rotation={rotation}
               offsetX={offsetX} offsetY={offsetY}
               onOffsetChange={(x, y) => { setOffsetX(x); setOffsetY(y); }}
+            />
+            <SeamlessChecker
+              patternImage={patternImage}
+              scale={scale}
+              rotation={rotation}
             />
             <DownloadSection
               patternImage={patternImage} template={selectedTemplate}
