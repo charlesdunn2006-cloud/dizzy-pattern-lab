@@ -14,7 +14,7 @@
  * Image stays the same size — no cropping.
  */
 
-export function makeSeamless(sourceImage: HTMLImageElement, blendPercent = 0.2): Promise<HTMLImageElement> {
+export function makeSeamless(sourceImage: HTMLImageElement, blendPercent = 0.05): Promise<HTMLImageElement> {
   return new Promise((resolve) => {
     const w = sourceImage.naturalWidth || sourceImage.width;
     const h = sourceImage.naturalHeight || sourceImage.height;
