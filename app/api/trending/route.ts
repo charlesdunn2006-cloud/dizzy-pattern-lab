@@ -92,7 +92,7 @@ export async function GET() {
 For each pattern, provide:
 1. title: A catchy name (2-4 words)
 2. description: One sentence describing the pattern
-3. prompt: A detailed DALL-E prompt to generate this as a seamless, tileable wallpaper pattern at print quality
+3. prompt: A detailed DALL-E prompt to generate this as a seamless, tileable wallpaper pattern. The prompt MUST emphasize that the pattern repeats perfectly with no visible seams, edges, or borders when tiled. Include specific design elements, colors, and style details
 
 Return ONLY a JSON array with objects like:
 [{"title": "...", "description": "...", "prompt": "..."}]

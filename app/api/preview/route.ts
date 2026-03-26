@@ -30,7 +30,7 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         model: "dall-e-3",
-        prompt: prompt.trim(),
+        prompt: `Create a seamless, tileable wallpaper pattern: ${prompt.trim()}. The design MUST repeat perfectly with no visible seams, edges, or borders when tiled horizontally and vertically. Ensure the left edge matches the right edge and the top edge matches the bottom edge exactly. Continuous repeating surface pattern design, print quality.`,
         n: 1,
         size: "1024x1024",
         quality: "standard",
