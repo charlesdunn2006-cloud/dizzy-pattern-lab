@@ -381,6 +381,12 @@ export default function TrendingPage() {
   const [loadingIndex, setLoadingIndex] = useState(-1);
   const [isGeneratingAll, setIsGeneratingAll] = useState(false);
   const loadingRef = useRef(false);
+  const imageCacheRef = useRef<ImageCache>({});
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    imageCacheRef.current = imageCache;
+  }, [imageCache]);
 
   // Load cached data on mount
   useEffect(() => {
@@ -443,10 +449,14 @@ export default function TrendingPage() {
     savePreviewToDB(id, currentMonth, thumbnail);
   }, [currentMonth]);
 
-  // Progressive loading: just advance to next index
+  // Progressive loading: advance to next index, skipping already-cached
   const advanceLoading = useCallback(() => {
     setLoadingIndex((prev) => {
-      const next = prev + 1;
+      let next = prev + 1;
+      // Skip patterns that already have cached images
+      while (next < patterns.length && imageCacheRef.current[patterns[next]?.id]) {
+        next++;
+      }
       if (next >= patterns.length) {
         setIsGeneratingAll(false);
         loadingRef.current = false;
@@ -454,7 +464,7 @@ export default function TrendingPage() {
       }
       return next;
     });
-  }, [patterns.length]);
+  }, [patterns]);
 
   // When an image finishes loading, advance to next
   const handleImageLoadedAndAdvance = useCallback(
@@ -477,9 +487,19 @@ export default function TrendingPage() {
     router.push("/");
   };
 
+  // Start generating from the first pattern that doesn't have a cached image
+  const handleGenerateRemaining = useCallback(() => {
+    const firstMissing = patterns.findIndex((p) => !imageCacheRef.current[p.id]);
+    if (firstMissing === -1) return; // all loaded
+    loadingRef.current = true;
+    setIsGeneratingAll(true);
+    setLoadingIndex(firstMissing);
+  }, [patterns]);
+
   // Count how many images are loaded
   const loadedCount = patterns.filter((p) => imageCache[p.id]).length;
   const allLoaded = loadedCount === patterns.length;
+  const hasPartial = loadedCount > 0 && !allLoaded;
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg-primary)" }}>
@@ -649,6 +669,24 @@ export default function TrendingPage() {
                 ? `GENERATING PREVIEWS (${loadedCount}/${patterns.length})...`
                 : "REFRESH TRENDS"}
           </button>
+          {hasPartial && !isGeneratingAll && !isLoading && (
+            <button
+              onClick={handleGenerateRemaining}
+              style={{
+                padding: "10px 24px",
+                border: "2px solid var(--accent)",
+                background: "transparent",
+                color: "var(--accent)",
+                fontSize: 12,
+                fontWeight: 600,
+                letterSpacing: "0.1em",
+                cursor: "pointer",
+                textTransform: "uppercase",
+              }}
+            >
+              GENERATE REMAINING ({patterns.length - loadedCount} LEFT)
+            </button>
+          )}
           {allLoaded && (
             <span style={{
               padding: "10px 24px",
