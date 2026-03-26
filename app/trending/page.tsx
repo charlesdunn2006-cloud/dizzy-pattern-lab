@@ -443,52 +443,24 @@ export default function TrendingPage() {
     savePreviewToDB(id, currentMonth, thumbnail);
   }, [currentMonth]);
 
-  // Progressive loading: advance to next pattern
+  // Progressive loading: just advance to next index
   const advanceLoading = useCallback(() => {
     setLoadingIndex((prev) => {
       const next = prev + 1;
       if (next >= patterns.length) {
         setIsGeneratingAll(false);
         loadingRef.current = false;
-        return prev;
+        return -1;
       }
-      // Skip patterns that already have cached images
-      let idx = next;
-      while (idx < patterns.length && imageCache[patterns[idx].id]) {
-        idx++;
-      }
-      if (idx >= patterns.length) {
-        setIsGeneratingAll(false);
-        loadingRef.current = false;
-        return prev;
-      }
-      return idx;
+      return next;
     });
-  }, [patterns, imageCache]);
-
-  const handleGenerateAll = useCallback(() => {
-    if (loadingRef.current) return;
-    loadingRef.current = true;
-    setIsGeneratingAll(true);
-    // Find first pattern without a cached image
-    let startIdx = 0;
-    while (startIdx < patterns.length && imageCache[patterns[startIdx].id]) {
-      startIdx++;
-    }
-    if (startIdx >= patterns.length) {
-      setIsGeneratingAll(false);
-      loadingRef.current = false;
-      return;
-    }
-    setLoadingIndex(startIdx);
-  }, [patterns, imageCache]);
+  }, [patterns.length]);
 
   // When an image finishes loading, advance to next
   const handleImageLoadedAndAdvance = useCallback(
     (id: string, thumbnail: string) => {
       handleImageLoaded(id, thumbnail);
       if (loadingRef.current) {
-        // Small delay to avoid hammering the API
         setTimeout(() => advanceLoading(), 500);
       }
     },
@@ -654,48 +626,29 @@ export default function TrendingPage() {
           )}
         </div>
 
-        {/* Action buttons */}
+        {/* Action button */}
         <div style={{ textAlign: "center", marginBottom: 24, display: "flex", justifyContent: "center", gap: 12, flexWrap: "wrap" }}>
           <button
             onClick={handleRefresh}
-            disabled={isLoading}
+            disabled={isLoading || isGeneratingAll}
             style={{
               padding: "10px 24px",
               border: "none",
-              background: isLoading ? "var(--bg-card)" : "var(--accent)",
-              color: isLoading ? "var(--text-muted)" : "#fff",
+              background: (isLoading || isGeneratingAll) ? "var(--bg-card)" : "var(--accent)",
+              color: (isLoading || isGeneratingAll) ? "var(--text-muted)" : "#fff",
               fontSize: 12,
               fontWeight: 600,
               letterSpacing: "0.1em",
-              cursor: isLoading ? "not-allowed" : "pointer",
+              cursor: (isLoading || isGeneratingAll) ? "not-allowed" : "pointer",
               textTransform: "uppercase",
             }}
           >
-            {isLoading ? "REFRESHING..." : "REFRESH TRENDS"}
-          </button>
-          {!allLoaded && (
-            <button
-              onClick={handleGenerateAll}
-              disabled={isGeneratingAll}
-              style={{
-                padding: "10px 24px",
-                border: "2px solid var(--accent)",
-                background: isGeneratingAll ? "var(--bg-card)" : "transparent",
-                color: isGeneratingAll ? "var(--text-muted)" : "var(--accent)",
-                fontSize: 12,
-                fontWeight: 600,
-                letterSpacing: "0.1em",
-                cursor: isGeneratingAll ? "not-allowed" : "pointer",
-                textTransform: "uppercase",
-              }}
-            >
-              {isGeneratingAll
+            {isLoading
+              ? "REFRESHING..."
+              : isGeneratingAll
                 ? `GENERATING PREVIEWS (${loadedCount}/${patterns.length})...`
-                : loadedCount > 0
-                  ? `GENERATE REMAINING (${patterns.length - loadedCount})`
-                  : "GENERATE ALL PREVIEWS"}
-            </button>
-          )}
+                : "REFRESH TRENDS"}
+          </button>
           {allLoaded && (
             <span style={{
               padding: "10px 24px",
@@ -729,9 +682,7 @@ export default function TrendingPage() {
               onSelect={(pattern) => handleSelect(pattern)}
               cachedImage={imageCache[pattern.id] || null}
               cacheLoaded={cacheLoaded}
-              onImageLoaded={
-                isGeneratingAll ? handleImageLoadedAndAdvance : handleImageLoaded
-              }
+              onImageLoaded={handleImageLoadedAndAdvance}
               autoLoad={isGeneratingAll && loadingIndex === index}
             />
           ))}
