@@ -322,7 +322,7 @@ export default function PatternLab() {
           </p>
           <p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.8, maxWidth: 560, margin: "0 auto" }}>
             Pattern previews and downloads are processed locally in your browser.
-            AI pattern generation is powered by DALL-E 3.
+            AI pattern generation is powered by GPT Image.
           </p>
         </div>
       </main>
