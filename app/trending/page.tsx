@@ -419,8 +419,11 @@ export default function TrendingPage() {
         setPatterns(data.patterns);
         setIsLive(true);
         localStorage.setItem("trending_cache", JSON.stringify(data));
-        // Clear image cache for new patterns
+        // Clear image cache for new patterns and auto-generate previews
         setImageCache({});
+        loadingRef.current = true;
+        setIsGeneratingAll(true);
+        setLoadingIndex(0);
       }
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to refresh trends");
