@@ -4,33 +4,43 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { TRENDING_PATTERNS, getCurrentMonth, TrendingPattern } from "./data";
 import PatternPreview from "./PatternPreview";
-
-// Cache key for thumbnail images
-const IMAGE_CACHE_KEY = "trending_images_cache";
-const CACHE_VERSION_KEY = "trending_images_version";
+import { supabase } from "../lib/supabase";
 
 interface ImageCache {
   [patternId: string]: string; // patternId -> thumbnail dataURL
 }
 
-function getImageCache(): ImageCache {
+// Load cached preview images from Supabase
+async function loadImageCacheFromDB(month: string): Promise<ImageCache> {
   try {
-    const raw = localStorage.getItem(IMAGE_CACHE_KEY);
-    return raw ? JSON.parse(raw) : {};
+    const { data, error } = await supabase
+      .from("trending_previews")
+      .select("pattern_id, thumbnail_data_url")
+      .eq("month", month);
+    if (error || !data) return {};
+    const cache: ImageCache = {};
+    data.forEach((row) => {
+      cache[row.pattern_id] = row.thumbnail_data_url;
+    });
+    return cache;
   } catch {
     return {};
   }
 }
 
-function saveImageCache(cache: ImageCache) {
+// Save a single preview image to Supabase
+async function savePreviewToDB(patternId: string, month: string, thumbnailDataUrl: string) {
   try {
-    localStorage.setItem(IMAGE_CACHE_KEY, JSON.stringify(cache));
+    await supabase
+      .from("trending_previews")
+      .upsert({
+        id: `${month}-${patternId}`,
+        pattern_id: patternId,
+        month,
+        thumbnail_data_url: thumbnailDataUrl,
+      }, { onConflict: "id" });
   } catch {
-    // localStorage full — clear old entries
-    try {
-      localStorage.removeItem(IMAGE_CACHE_KEY);
-      localStorage.setItem(IMAGE_CACHE_KEY, JSON.stringify(cache));
-    } catch { /* give up */ }
+    // silently fail — localStorage fallback still works
   }
 }
 
@@ -354,9 +364,12 @@ export default function TrendingPage() {
         /* use static fallback */
       }
     }
-    // Load cached images
-    const cachedImages = getImageCache();
-    setImageCache(cachedImages);
+    // Load cached images from Supabase
+    loadImageCacheFromDB(currentMonth).then((dbCache) => {
+      if (Object.keys(dbCache).length > 0) {
+        setImageCache(dbCache);
+      }
+    });
   }, [currentMonth]);
 
   const handleRefresh = useCallback(async () => {
@@ -372,9 +385,8 @@ export default function TrendingPage() {
         setPatterns(data.patterns);
         setIsLive(true);
         localStorage.setItem("trending_cache", JSON.stringify(data));
-        // Clear old image cache for new patterns
+        // Clear image cache for new patterns
         setImageCache({});
-        localStorage.removeItem(IMAGE_CACHE_KEY);
       }
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to refresh trends");
@@ -386,10 +398,11 @@ export default function TrendingPage() {
   const handleImageLoaded = useCallback((id: string, thumbnail: string) => {
     setImageCache((prev) => {
       const updated = { ...prev, [id]: thumbnail };
-      saveImageCache(updated);
       return updated;
     });
-  }, []);
+    // Persist to Supabase
+    savePreviewToDB(id, currentMonth, thumbnail);
+  }, [currentMonth]);
 
   // Progressive loading: advance to next pattern
   const advanceLoading = useCallback(() => {
