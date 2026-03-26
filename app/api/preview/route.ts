@@ -39,9 +39,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Try Replicate first (native seamless tiling)
+    // Use Replicate's material_stable_diffusion (circular convolution = native seamless tiling)
     if (replicateToken) {
-      const fullPrompt = `Seamless tileable wallpaper pattern: ${prompt.trim()}. Perfectly repeating surface pattern, no visible seams or borders when tiled. Clean shapes, bold colors, flat graphic illustration style, print quality.`;
+      const fullPrompt = `${prompt.trim()}, seamless tileable wallpaper pattern, repeating surface design, clean shapes, bold colors, flat graphic illustration, print quality`;
 
       const res = await fetch("https://api.replicate.com/v1/predictions", {
         method: "POST",
@@ -50,17 +50,14 @@ export async function POST(request: Request) {
           Authorization: `Bearer ${replicateToken}`,
         },
         body: JSON.stringify({
-          version: "7762fd07cf82c948538e41f63f77d685e02b063e37e496e96eefd46c929f9bdc",
+          version: "3b5c0242f8925a4ab6c79b4c51e9b4ce6374e9b07b5e8461d89e692fd0faa449",
           input: {
             prompt: fullPrompt,
-            negative_prompt: "seams, borders, edges, frames, watermark, text, signature, blurry, low quality, asymmetric edges, non-repeating",
-            width: 1024,
-            height: 1024,
-            num_inference_steps: 25,
-            guidance_scale: 7.5,
-            scheduler: "K_EULER",
+            width: 512,
+            height: 512,
             num_outputs: 1,
-            disable_safety_checker: true,
+            num_inference_steps: 40,
+            guidance_scale: 7.5,
           },
         }),
       });
