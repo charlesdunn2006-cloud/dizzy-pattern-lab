@@ -4,7 +4,9 @@ import { useState, useCallback } from "react";
 
 interface Props {
   patternImage: HTMLImageElement | null;
+  hasOriginal: boolean;
   onImageProcessed: (img: HTMLImageElement) => void;
+  onReset: () => void;
 }
 
 type SeamlessMethod = "blend" | "mirror";
@@ -111,7 +113,7 @@ function applyMirrorTile(source: HTMLImageElement): HTMLCanvasElement {
   return canvas;
 }
 
-export default function SeamlessMaker({ patternImage, onImageProcessed }: Props) {
+export default function SeamlessMaker({ patternImage, hasOriginal, onImageProcessed, onReset }: Props) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeMethod, setActiveMethod] = useState<SeamlessMethod | null>(null);
 
@@ -230,6 +232,28 @@ export default function SeamlessMaker({ patternImage, onImageProcessed }: Props)
           </span>
         </button>
       </div>
+
+      {hasOriginal && (
+        <button
+          onClick={onReset}
+          style={{
+            marginTop: 10,
+            width: "100%",
+            padding: "10px 16px",
+            border: "1px solid var(--border)",
+            background: "transparent",
+            color: "var(--text-muted)",
+            fontSize: 11,
+            fontWeight: 600,
+            letterSpacing: "0.1em",
+            cursor: "pointer",
+            textTransform: "uppercase",
+            transition: "all 0.15s",
+          }}
+        >
+          RESET TO ORIGINAL
+        </button>
+      )}
     </div>
   );
 }

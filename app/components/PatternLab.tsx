@@ -29,6 +29,7 @@ export default function PatternLab() {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [projectName, setProjectName] = useState("");
   const [showSaveForm, setShowSaveForm] = useState(false);
+  const [originalImage, setOriginalImage] = useState<HTMLImageElement | null>(null);
 
   // Load project from sessionStorage (coming from /saved page)
   useEffect(() => {
@@ -54,6 +55,7 @@ export default function PatternLab() {
 
   const resetPattern = useCallback(() => {
     setPatternImage(null);
+    setOriginalImage(null);
     setPatternFileName("");
     setPatternDescription("");
     setSelectedTemplate(null);
@@ -297,10 +299,20 @@ export default function PatternLab() {
             />
             <SeamlessMaker
               patternImage={patternImage}
+              hasOriginal={!!originalImage}
               onImageProcessed={(img) => {
+                if (!originalImage) setOriginalImage(patternImage);
                 setPatternImage(img);
                 setOffsetX(0);
                 setOffsetY(0);
+              }}
+              onReset={() => {
+                if (originalImage) {
+                  setPatternImage(originalImage);
+                  setOriginalImage(null);
+                  setOffsetX(0);
+                  setOffsetY(0);
+                }
               }}
             />
             <PreviewCanvas

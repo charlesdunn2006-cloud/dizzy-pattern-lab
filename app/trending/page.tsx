@@ -67,6 +67,7 @@ function TrendingCard({
   index,
   onSelect,
   cachedImage,
+  cacheLoaded,
   onImageLoaded,
   autoLoad,
 }: {
@@ -74,20 +75,21 @@ function TrendingCard({
   index: number;
   onSelect: (pattern: TrendingPattern) => void;
   cachedImage: string | null;
+  cacheLoaded: boolean;
   onImageLoaded: (id: string, thumbnail: string) => void;
   autoLoad: boolean;
 }) {
-  const [imageUrl, setImageUrl] = useState<string | null>(cachedImage);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState(false);
   const hasStarted = useRef(false);
 
   // Sync with parent cache when Supabase data loads
   useEffect(() => {
-    if (cachedImage && !imageUrl) {
+    if (cachedImage) {
       setImageUrl(cachedImage);
     }
-  }, [cachedImage, imageUrl]);
+  }, [cachedImage]);
 
   const generatePreview = useCallback(async () => {
     if (isGenerating || imageUrl || hasStarted.current) return;
@@ -234,6 +236,29 @@ function TrendingCard({
               Retry
             </div>
           </div>
+        ) : !cacheLoaded ? (
+          <div
+            style={{
+              width: "100%",
+              height: "100%",
+              background: "#f5f5f0",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <div
+              style={{
+                width: 24,
+                height: 24,
+                border: "2px solid var(--border)",
+                borderTopColor: "var(--accent)",
+                borderRadius: "50%",
+                animation: "spin 1s linear infinite",
+                opacity: 0.5,
+              }}
+            />
+          </div>
         ) : (
           <PatternPreview pattern={pattern} width={280} height={200} />
         )}
@@ -352,6 +377,7 @@ export default function TrendingPage() {
   const [isLive, setIsLive] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [imageCache, setImageCache] = useState<ImageCache>({});
+  const [cacheLoaded, setCacheLoaded] = useState(false);
   const [loadingIndex, setLoadingIndex] = useState(-1);
   const [isGeneratingAll, setIsGeneratingAll] = useState(false);
   const loadingRef = useRef(false);
@@ -376,6 +402,7 @@ export default function TrendingPage() {
       if (Object.keys(dbCache).length > 0) {
         setImageCache(dbCache);
       }
+      setCacheLoaded(true);
     });
   }, [currentMonth]);
 
@@ -696,6 +723,7 @@ export default function TrendingPage() {
               index={index}
               onSelect={(pattern) => handleSelect(pattern)}
               cachedImage={imageCache[pattern.id] || null}
+              cacheLoaded={cacheLoaded}
               onImageLoaded={
                 isGeneratingAll ? handleImageLoadedAndAdvance : handleImageLoaded
               }
