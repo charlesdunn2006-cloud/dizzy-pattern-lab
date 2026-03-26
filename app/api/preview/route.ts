@@ -2,15 +2,32 @@ import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(request: Request) {
-  const apiKey = process.env.OPENAI_API_KEY;
-
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "OpenAI API key not configured on the server." },
-      { status: 500 }
-    );
+// Poll for prediction completion
+async function waitForPrediction(
+  id: string,
+  token: string,
+  maxWait = 120000
+): Promise<{ output: string[] | null; error: string | null }> {
+  const start = Date.now();
+  while (Date.now() - start < maxWait) {
+    const res = await fetch(`https://api.replicate.com/v1/predictions/${id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    if (data.status === "succeeded") {
+      return { output: data.output, error: null };
+    }
+    if (data.status === "failed" || data.status === "canceled") {
+      return { output: null, error: data.error || "Prediction failed" };
+    }
+    await new Promise((r) => setTimeout(r, 1000));
   }
+  return { output: null, error: "Prediction timed out" };
+}
+
+export async function POST(request: Request) {
+  const replicateToken = process.env.REPLICATE_API_TOKEN;
+  const openaiKey = process.env.OPENAI_API_KEY;
 
   try {
     const { prompt } = await request.json();
@@ -22,11 +39,61 @@ export async function POST(request: Request) {
       );
     }
 
+    // Try Replicate first (native seamless tiling)
+    if (replicateToken) {
+      const fullPrompt = `Seamless tileable wallpaper pattern: ${prompt.trim()}. Perfectly repeating surface pattern, no visible seams or borders when tiled. Clean shapes, bold colors, flat graphic illustration style, print quality.`;
+
+      const res = await fetch("https://api.replicate.com/v1/predictions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${replicateToken}`,
+        },
+        body: JSON.stringify({
+          version: "7762fd07cf82c948538e41f63f77d685e02b063e37e496e96eefd46c929f9bdc",
+          input: {
+            prompt: fullPrompt,
+            negative_prompt: "seams, borders, edges, frames, watermark, text, signature, blurry, low quality, asymmetric edges, non-repeating",
+            width: 1024,
+            height: 1024,
+            num_inference_steps: 25,
+            guidance_scale: 7.5,
+            scheduler: "K_EULER",
+            num_outputs: 1,
+            disable_safety_checker: true,
+          },
+        }),
+      });
+
+      if (res.ok) {
+        const prediction = await res.json();
+        const result = await waitForPrediction(prediction.id, replicateToken);
+
+        if (result.output && result.output.length > 0) {
+          const imageUrl = result.output[0];
+          const imgRes = await fetch(imageUrl);
+          const buffer = await imgRes.arrayBuffer();
+          const b64 = Buffer.from(buffer).toString("base64");
+          return NextResponse.json({ image: b64 });
+        }
+
+        console.warn("Replicate preview failed:", result.error);
+      }
+    }
+
+    // Fallback to DALL-E
+    if (!openaiKey) {
+      return NextResponse.json(
+        { error: "No AI API keys configured. Add REPLICATE_API_TOKEN or OPENAI_API_KEY." },
+        { status: 500 }
+      );
+    }
+
     const response = await fetch("https://api.openai.com/v1/images/generations", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${openaiKey}`,
       },
       body: JSON.stringify({
         model: "dall-e-3",
@@ -40,9 +107,7 @@ export async function POST(request: Request) {
 
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
-      throw new Error(
-        err?.error?.message || `OpenAI API error: ${response.status}`
-      );
+      throw new Error(err?.error?.message || `OpenAI API error: ${response.status}`);
     }
 
     const data = await response.json();
@@ -50,8 +115,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ image: b64 });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Failed to generate preview.";
+    const message = error instanceof Error ? error.message : "Failed to generate preview.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
