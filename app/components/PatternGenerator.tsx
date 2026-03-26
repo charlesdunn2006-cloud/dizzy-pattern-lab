@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { QUICK_IDEAS } from "../types";
+import { makeSeamless } from "../lib/makeSeamless";
 
 interface Props {
   onPatternGenerated: (img: HTMLImageElement) => void;
@@ -26,10 +27,11 @@ export default function PatternGenerator({ onPatternGenerated, onDescriptionChan
     }
     if (trendingImage) {
       sessionStorage.removeItem("trending_image");
-      // Load the cached image directly — skip generation
+      // Load the cached image and make it seamless
       const img = new Image();
-      img.onload = () => {
-        onPatternGenerated(img);
+      img.onload = async () => {
+        const seamlessImg = await makeSeamless(img);
+        onPatternGenerated(seamlessImg);
       };
       img.src = trendingImage;
     }
@@ -57,8 +59,10 @@ export default function PatternGenerator({ onPatternGenerated, onDescriptionChan
 
       const data = await response.json();
       const img = new Image();
-      img.onload = () => {
-        onPatternGenerated(img);
+      img.onload = async () => {
+        // Auto-apply seamless processing
+        const seamlessImg = await makeSeamless(img);
+        onPatternGenerated(seamlessImg);
         setIsGenerating(false);
       };
       img.onerror = () => {
