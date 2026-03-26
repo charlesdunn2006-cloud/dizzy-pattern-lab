@@ -39,9 +39,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Use Replicate's seamless-texture model (Flux + seamless tiling LoRA)
+    // Use pwntus/material-diffusion-sdxl — SDXL with circular conv padding
     if (replicateToken) {
-      const fullPrompt = `${prompt.trim()}, seamless tileable wallpaper pattern, repeating surface design, clean shapes, bold colors, flat graphic illustration, print quality`;
+      const fullPrompt = `${prompt.trim()}, seamless tileable pattern, repeating wallpaper design, clean vector shapes, bold flat colors, surface pattern, print quality`;
 
       const res = await fetch("https://api.replicate.com/v1/predictions", {
         method: "POST",
@@ -50,18 +50,17 @@ export async function POST(request: Request) {
           Authorization: `Bearer ${replicateToken}`,
         },
         body: JSON.stringify({
-          version: "9a59c0dce189bfe8a7fcb379c497713500ff959652c4e7874023f15983dec839",
+          version: "ce888cbe17a7c04d4b9c4cbd2b576715d480c55b2ba8f9f3d33f2ad70a26cd99",
           input: {
             prompt: fullPrompt,
-            model: "schnell",
-            width: 1024,
-            height: 1024,
+            negative_prompt: "seams, borders, edges, frames, watermark, text, signature, blurry, low quality, photograph, photorealistic, 3d render",
+            width: 768,
+            height: 768,
             num_outputs: 1,
-            num_inference_steps: 4,
-            guidance_scale: 3,
-            output_format: "png",
-            output_quality: 90,
-            disable_safety_checker: true,
+            num_inference_steps: 40,
+            guidance_scale: 7.5,
+            scheduler: "DDIM",
+            apply_watermark: false,
           },
         }),
       });

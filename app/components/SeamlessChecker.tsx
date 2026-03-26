@@ -28,45 +28,41 @@ function analyzeSeamlessness(canvas: HTMLCanvasElement): SeamlessResult {
   // Compare left edge vs right edge
   let hDiffTotal = 0;
   let hPixels = 0;
-  const edgeSamples = 3; // Check a few pixels deep from each edge
+  // Compare left column vs right column (pixel-by-pixel wrap test)
+  for (let y = 0; y < h; y++) {
+    const leftIdx = (y * w + 0) * 4;
+    const rightIdx = (y * w + (w - 1)) * 4;
 
-  for (let depth = 0; depth < edgeSamples; depth++) {
-    for (let y = 0; y < h; y++) {
-      const leftIdx = (y * w + depth) * 4;
-      const rightIdx = (y * w + (w - 1 - depth)) * 4;
-
-      const dr = Math.abs(data[leftIdx] - data[rightIdx]);
-      const dg = Math.abs(data[leftIdx + 1] - data[rightIdx + 1]);
-      const db = Math.abs(data[leftIdx + 2] - data[rightIdx + 2]);
-      hDiffTotal += (dr + dg + db) / 3;
-      hPixels++;
-    }
+    const dr = Math.abs(data[leftIdx] - data[rightIdx]);
+    const dg = Math.abs(data[leftIdx + 1] - data[rightIdx + 1]);
+    const db = Math.abs(data[leftIdx + 2] - data[rightIdx + 2]);
+    hDiffTotal += (dr + dg + db) / 3;
+    hPixels++;
   }
 
-  // Compare top edge vs bottom edge
+  // Compare top row vs bottom row
   let vDiffTotal = 0;
   let vPixels = 0;
 
-  for (let depth = 0; depth < edgeSamples; depth++) {
-    for (let x = 0; x < w; x++) {
-      const topIdx = (depth * w + x) * 4;
-      const bottomIdx = ((h - 1 - depth) * w + x) * 4;
+  for (let x = 0; x < w; x++) {
+    const topIdx = (0 * w + x) * 4;
+    const bottomIdx = ((h - 1) * w + x) * 4;
 
-      const dr = Math.abs(data[topIdx] - data[bottomIdx]);
-      const dg = Math.abs(data[topIdx + 1] - data[bottomIdx + 1]);
-      const db = Math.abs(data[topIdx + 2] - data[bottomIdx + 2]);
-      vDiffTotal += (dr + dg + db) / 3;
-      vPixels++;
-    }
+    const dr = Math.abs(data[topIdx] - data[bottomIdx]);
+    const dg = Math.abs(data[topIdx + 1] - data[bottomIdx + 1]);
+    const db = Math.abs(data[topIdx + 2] - data[bottomIdx + 2]);
+    vDiffTotal += (dr + dg + db) / 3;
+    vPixels++;
   }
 
   const hAvgDiff = hPixels > 0 ? hDiffTotal / hPixels : 255;
   const vAvgDiff = vPixels > 0 ? vDiffTotal / vPixels : 255;
 
   // Convert average pixel difference (0-255) to a score (0-100)
-  // Lower difference = higher score
-  const horizontalScore = Math.max(0, Math.round(100 - (hAvgDiff / 255) * 100 * 4));
-  const verticalScore = Math.max(0, Math.round(100 - (vAvgDiff / 255) * 100 * 4));
+  // Typical seamless patterns have avg diff < 5, bad ones > 30
+  // Use a curve: score = 100 * e^(-diff/20)
+  const horizontalScore = Math.round(100 * Math.exp(-hAvgDiff / 20));
+  const verticalScore = Math.round(100 * Math.exp(-vAvgDiff / 20));
   const score = Math.round((horizontalScore + verticalScore) / 2);
 
   let verdict: SeamlessResult["verdict"];
