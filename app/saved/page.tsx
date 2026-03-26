@@ -11,13 +11,16 @@ export default function SavedPage() {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   useEffect(() => {
-    setProjects(getSavedProjects());
-    setLoaded(true);
+    getSavedProjects().then((data) => {
+      setProjects(data);
+      setLoaded(true);
+    });
   }, []);
 
-  const handleDelete = useCallback((id: string) => {
-    deleteProject(id);
-    setProjects(getSavedProjects());
+  const handleDelete = useCallback(async (id: string) => {
+    await deleteProject(id);
+    const updated = await getSavedProjects();
+    setProjects(updated);
     setConfirmDelete(null);
   }, []);
 

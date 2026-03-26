@@ -75,7 +75,7 @@ export default function PatternLab() {
     setSaveStatus("idle");
   }, []);
 
-  const handleSaveProject = useCallback(() => {
+  const handleSaveProject = useCallback(async () => {
     if (!patternImage) return;
     setSaveStatus("saving");
 
@@ -89,7 +89,7 @@ export default function PatternLab() {
     const imageDataUrl = canvas.toDataURL("image/png");
     const thumbnailDataUrl = createThumbnail(patternImage);
 
-    saveProject({
+    const result = await saveProject({
       name: projectName.trim() || patternFileName || "Untitled Pattern",
       description: patternDescription,
       imageDataUrl,
@@ -101,9 +101,14 @@ export default function PatternLab() {
       tileSize: '24" × 24"',
     });
 
-    setSaveStatus("saved");
-    setShowSaveForm(false);
-    setTimeout(() => setSaveStatus("idle"), 3000);
+    if (result) {
+      setSaveStatus("saved");
+      setShowSaveForm(false);
+      setTimeout(() => setSaveStatus("idle"), 3000);
+    } else {
+      setSaveStatus("idle");
+      alert("Failed to save project. Please try again.");
+    }
   }, [patternImage, patternFileName, patternDescription, projectName, scale, rotation]);
 
   const tabStyle = (tab: Tab): React.CSSProperties => ({
