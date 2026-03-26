@@ -82,6 +82,13 @@ function TrendingCard({
   const [error, setError] = useState(false);
   const hasStarted = useRef(false);
 
+  // Sync with parent cache when Supabase data loads
+  useEffect(() => {
+    if (cachedImage && !imageUrl) {
+      setImageUrl(cachedImage);
+    }
+  }, [cachedImage, imageUrl]);
+
   const generatePreview = useCallback(async () => {
     if (isGenerating || imageUrl || hasStarted.current) return;
     hasStarted.current = true;
