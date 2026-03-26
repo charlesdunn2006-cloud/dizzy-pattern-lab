@@ -10,6 +10,7 @@ import PatternControls from "./PatternControls";
 import PreviewCanvas from "./PreviewCanvas";
 import DownloadSection from "./DownloadSection";
 import SeamlessChecker from "./SeamlessChecker";
+import WallPreviewModal from "./WallPreviewModal";
 import Header from "./Header";
 
 type Tab = "generate" | "upload";
@@ -28,7 +29,9 @@ export default function PatternLab() {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [projectName, setProjectName] = useState("");
   const [showSaveForm, setShowSaveForm] = useState(false);
-
+  const [wallWidthFeet, setWallWidthFeet] = useState(10);
+  const [wallHeightFeet, setWallHeightFeet] = useState(8);
+  const [showWallPreview, setShowWallPreview] = useState(false);
 
   // Load project from sessionStorage (coming from /saved page)
   useEffect(() => {
@@ -97,8 +100,8 @@ export default function PatternLab() {
       thumbnailDataUrl,
       scale,
       rotation,
-      wallWidthFeet: 10,
-      wallHeightFeet: 8,
+      wallWidthFeet,
+      wallHeightFeet,
       tileSize: '24" × 24"',
     });
 
@@ -110,7 +113,7 @@ export default function PatternLab() {
       setSaveStatus("idle");
       alert("Failed to save project. Please try again.");
     }
-  }, [patternImage, patternFileName, patternDescription, projectName, scale, rotation]);
+  }, [patternImage, patternFileName, patternDescription, projectName, scale, rotation, wallWidthFeet, wallHeightFeet]);
 
   const tabStyle = (tab: Tab): React.CSSProperties => ({
     padding: "12px 24px",
@@ -174,7 +177,7 @@ export default function PatternLab() {
               onPatternGenerated={handleAIGenerated}
               onDescriptionChange={setPatternDescription}
             />
-            <WallDimensions />
+            <WallDimensions wallWidth={wallWidthFeet} wallHeight={wallHeightFeet} onWallSizeChange={(w, h) => { setWallWidthFeet(w); setWallHeightFeet(h); }} />
           </>
         ) : (
           <>
@@ -184,7 +187,7 @@ export default function PatternLab() {
               hasFile={!!patternImage}
               fileName={patternFileName}
             />
-            <WallDimensions />
+            <WallDimensions wallWidth={wallWidthFeet} wallHeight={wallHeightFeet} onWallSizeChange={(w, h) => { setWallWidthFeet(w); setWallHeightFeet(h); }} />
           </>
         )}
 
@@ -301,6 +304,44 @@ export default function PatternLab() {
               offsetX={offsetX} offsetY={offsetY}
               onOffsetChange={(x, y) => { setOffsetX(x); setOffsetY(y); }}
             />
+            {/* Wall Preview button */}
+            <div style={{ textAlign: "center", marginBottom: 36 }}>
+              <button
+                onClick={() => setShowWallPreview(true)}
+                style={{
+                  padding: "14px 32px",
+                  border: "2px solid var(--accent)",
+                  background: "transparent",
+                  color: "var(--accent)",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  letterSpacing: "0.12em",
+                  cursor: "pointer",
+                  textTransform: "uppercase",
+                  transition: "all 0.15s",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "var(--accent)";
+                  e.currentTarget.style.color = "#fff";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "transparent";
+                  e.currentTarget.style.color = "var(--accent)";
+                }}
+              >
+                WALL PREVIEW &mdash; {wallWidthFeet}&prime; &times; {wallHeightFeet}&prime;
+              </button>
+            </div>
+            {showWallPreview && (
+              <WallPreviewModal
+                patternImage={patternImage}
+                wallWidthFeet={wallWidthFeet}
+                wallHeightFeet={wallHeightFeet}
+                scale={scale}
+                rotation={rotation}
+                onClose={() => setShowWallPreview(false)}
+              />
+            )}
             <SeamlessChecker
               patternImage={patternImage}
               scale={scale}

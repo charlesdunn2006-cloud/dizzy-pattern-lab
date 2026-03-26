@@ -4,13 +4,16 @@ import { useState, useMemo } from "react";
 import { TILE_SIZES, TileSize, calculateTiles } from "../types";
 
 interface Props {
+  wallWidth?: number;
+  wallHeight?: number;
+  onWallSizeChange?: (w: number, h: number) => void;
   onDimensionsChange?: (wallW: number, wallH: number, tile: TileSize) => void;
 }
 
-export default function WallDimensions({ onDimensionsChange }: Props) {
+export default function WallDimensions({ wallWidth, wallHeight, onWallSizeChange, onDimensionsChange }: Props) {
   const [unit, setUnit] = useState<"feet" | "inches">("feet");
-  const [width, setWidth] = useState(10);
-  const [height, setHeight] = useState(8);
+  const [width, setWidth] = useState(wallWidth ?? 10);
+  const [height, setHeight] = useState(wallHeight ?? 8);
   const [selectedTile, setSelectedTile] = useState<TileSize>(TILE_SIZES[2]); // 24x24 default
 
   const wallWidthFeet = unit === "feet" ? width : width / 12;
@@ -31,6 +34,7 @@ export default function WallDimensions({ onDimensionsChange }: Props) {
     setHeight(newHeight);
     const wFeet = unit === "feet" ? newWidth : newWidth / 12;
     const hFeet = unit === "feet" ? newHeight : newHeight / 12;
+    onWallSizeChange?.(wFeet, hFeet);
     onDimensionsChange?.(wFeet, hFeet, selectedTile);
   };
 
