@@ -12,6 +12,7 @@ import DownloadSection from "./DownloadSection";
 import SeamlessChecker from "./SeamlessChecker";
 import WallPreviewModal from "./WallPreviewModal";
 import Header from "./Header";
+import Tooltip from "./Tooltip";
 
 type Tab = "generate" | "upload";
 
@@ -162,12 +163,16 @@ export default function PatternLab() {
           display: "flex", gap: 0, marginBottom: 36,
           borderBottom: "1px solid var(--border)",
         }}>
-          <button style={tabStyle("generate")} onClick={() => setActiveTab("generate")}>
-            Text to Pattern
-          </button>
-          <button style={tabStyle("upload")} onClick={() => setActiveTab("upload")}>
-            Image Upload
-          </button>
+          <Tooltip text="Describe a pattern and AI will create it" position="bottom">
+            <button style={tabStyle("generate")} onClick={() => setActiveTab("generate")}>
+              Text to Pattern
+            </button>
+          </Tooltip>
+          <Tooltip text="Upload your own image to use as a pattern" position="bottom">
+            <button style={tabStyle("upload")} onClick={() => setActiveTab("upload")}>
+              Image Upload
+            </button>
+          </Tooltip>
         </div>
 
         {/* Tab content */}
@@ -213,17 +218,19 @@ export default function PatternLab() {
                     &#10003; SAVED
                   </span>
                 ) : (
-                  <button
-                    onClick={() => setShowSaveForm(!showSaveForm)}
-                    style={{
-                      background: "var(--accent)", border: "none",
-                      color: "#fff", cursor: "pointer", fontSize: 11,
-                      fontWeight: 600, letterSpacing: "0.1em",
-                      padding: "8px 16px", textTransform: "uppercase",
-                    }}
-                  >
-                    SAVE PROJECT
-                  </button>
+                  <Tooltip text="Save this pattern to your local collection">
+                    <button
+                      onClick={() => setShowSaveForm(!showSaveForm)}
+                      style={{
+                        background: "var(--accent)", border: "none",
+                        color: "#fff", cursor: "pointer", fontSize: 11,
+                        fontWeight: 600, letterSpacing: "0.1em",
+                        padding: "8px 16px", textTransform: "uppercase",
+                      }}
+                    >
+                      SAVE PROJECT
+                    </button>
+                  </Tooltip>
                 )}
                 {activeTab === "generate" && (
                   <button
@@ -306,31 +313,33 @@ export default function PatternLab() {
             />
             {/* Wall Preview button */}
             <div style={{ textAlign: "center", marginBottom: 36 }}>
-              <button
-                onClick={() => setShowWallPreview(true)}
-                style={{
-                  padding: "14px 32px",
-                  border: "2px solid var(--accent)",
-                  background: "transparent",
-                  color: "var(--accent)",
-                  fontSize: 12,
-                  fontWeight: 700,
-                  letterSpacing: "0.12em",
-                  cursor: "pointer",
-                  textTransform: "uppercase",
-                  transition: "all 0.15s",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "var(--accent)";
-                  e.currentTarget.style.color = "#fff";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "transparent";
-                  e.currentTarget.style.color = "var(--accent)";
-                }}
-              >
-                WALL PREVIEW &mdash; {wallWidthFeet}&prime; &times; {wallHeightFeet}&prime;
-              </button>
+              <Tooltip text="See your pattern on a realistic room wall with furniture">
+                <button
+                  onClick={() => setShowWallPreview(true)}
+                  style={{
+                    padding: "14px 32px",
+                    border: "2px solid var(--accent)",
+                    background: "transparent",
+                    color: "var(--accent)",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    letterSpacing: "0.12em",
+                    cursor: "pointer",
+                    textTransform: "uppercase",
+                    transition: "all 0.15s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "var(--accent)";
+                    e.currentTarget.style.color = "#fff";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "transparent";
+                    e.currentTarget.style.color = "var(--accent)";
+                  }}
+                >
+                  WALL PREVIEW &mdash; {wallWidthFeet}&prime; &times; {wallHeightFeet}&prime;
+                </button>
+              </Tooltip>
             </div>
             {showWallPreview && (
               <WallPreviewModal

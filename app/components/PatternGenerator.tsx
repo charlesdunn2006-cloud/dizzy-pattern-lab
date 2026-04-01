@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { makeSeamless } from "../lib/makeSeamless";
+import Tooltip from "./Tooltip";
 
 interface Props {
   onPatternGenerated: (img: HTMLImageElement) => void;
@@ -309,75 +310,82 @@ export default function PatternGenerator({ onPatternGenerated, onDescriptionChan
             marginBottom: 10,
           }}
         >
-          <label
-            style={{
-              fontSize: 10,
-              fontWeight: 500,
-              letterSpacing: "0.14em",
-              textTransform: "uppercase",
-              color: "var(--text-muted)",
-            }}
-          >
-            Describe your pattern
-          </label>
+          <Tooltip text="Describe the colors, style, and motifs you want" position="bottom">
+            <label
+              style={{
+                fontSize: 10,
+                fontWeight: 500,
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                color: "var(--text-muted)",
+                cursor: "default",
+              }}
+            >
+              Describe your pattern
+            </label>
+          </Tooltip>
           <div style={{ display: "flex", gap: 6 }}>
             {/* Suggestions toggle */}
-            <button
-              type="button"
-              onClick={() => {
-                setShowSuggestions(!showSuggestions);
-                setShowSettings(false);
-              }}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 5,
-                padding: "4px 10px",
-                fontSize: 11,
-                fontWeight: 500,
-                borderRadius: 6,
-                border: "1px solid var(--border)",
-                background: showSuggestions ? "var(--accent)" : "transparent",
-                color: showSuggestions ? "#fff" : "var(--text-muted)",
-                cursor: "pointer",
-                transition: "all 0.15s",
-              }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" />
-                <path d="M9 18h6" />
-                <path d="M10 22h4" />
-              </svg>
-              Ideas
-            </button>
+            <Tooltip text="Browse curated prompt ideas by category">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSuggestions(!showSuggestions);
+                  setShowSettings(false);
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 5,
+                  padding: "4px 10px",
+                  fontSize: 11,
+                  fontWeight: 500,
+                  borderRadius: 6,
+                  border: "1px solid var(--border)",
+                  background: showSuggestions ? "var(--accent)" : "transparent",
+                  color: showSuggestions ? "#fff" : "var(--text-muted)",
+                  cursor: "pointer",
+                  transition: "all 0.15s",
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" />
+                  <path d="M9 18h6" />
+                  <path d="M10 22h4" />
+                </svg>
+                Ideas
+              </button>
+            </Tooltip>
             {/* Settings toggle */}
-            <button
-              type="button"
-              onClick={() => {
-                setShowSettings(!showSettings);
-                setShowSuggestions(false);
-              }}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 5,
-                padding: "4px 10px",
-                fontSize: 11,
-                fontWeight: 500,
-                borderRadius: 6,
-                border: "1px solid var(--border)",
-                background: showSettings ? "var(--accent)" : "transparent",
-                color: showSettings ? "#fff" : "var(--text-muted)",
-                cursor: "pointer",
-                transition: "all 0.15s",
-              }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-                <circle cx="12" cy="12" r="3" />
-              </svg>
-              Style
-            </button>
+            <Tooltip text="Adjust style, color mood, and complexity">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSettings(!showSettings);
+                  setShowSuggestions(false);
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 5,
+                  padding: "4px 10px",
+                  fontSize: 11,
+                  fontWeight: 500,
+                  borderRadius: 6,
+                  border: "1px solid var(--border)",
+                  background: showSettings ? "var(--accent)" : "transparent",
+                  color: showSettings ? "#fff" : "var(--text-muted)",
+                  cursor: "pointer",
+                  transition: "all 0.15s",
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+                Style
+              </button>
+            </Tooltip>
           </div>
         </div>
 
@@ -613,29 +621,38 @@ export default function PatternGenerator({ onPatternGenerated, onDescriptionChan
           Variations
         </span>
         <div style={{ display: "flex", gap: 4 }}>
-          {[1, 2, 3].map((n) => (
-            <button
+          {([1, 2, 3] as const).map((n) => (
+            <Tooltip
               key={n}
-              type="button"
-              onClick={() => setNumVariations(n)}
-              style={{
-                width: 36,
-                height: 32,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 13,
-                fontWeight: 600,
-                borderRadius: 8,
-                border: `1.5px solid ${numVariations === n ? "var(--accent)" : "var(--border)"}`,
-                background: numVariations === n ? "var(--accent)" : "transparent",
-                color: numVariations === n ? "#fff" : "var(--text-secondary)",
-                cursor: "pointer",
-                transition: "all 0.15s",
-              }}
+              text={
+                n === 1
+                  ? "Generate a single pattern"
+                  : `Generate ${n} options to choose from`
+              }
+              position="bottom"
             >
-              {n}
-            </button>
+              <button
+                type="button"
+                onClick={() => setNumVariations(n)}
+                style={{
+                  width: 36,
+                  height: 32,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  borderRadius: 8,
+                  border: `1.5px solid ${numVariations === n ? "var(--accent)" : "var(--border)"}`,
+                  background: numVariations === n ? "var(--accent)" : "transparent",
+                  color: numVariations === n ? "#fff" : "var(--text-secondary)",
+                  cursor: "pointer",
+                  transition: "all 0.15s",
+                }}
+              >
+                {n}
+              </button>
+            </Tooltip>
           ))}
         </div>
         <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
@@ -700,35 +717,44 @@ export default function PatternGenerator({ onPatternGenerated, onDescriptionChan
           </div>
         </div>
       ) : (
-        <button
-          onClick={handleGenerate}
-          style={{
-            width: "100%",
-            padding: "16px 20px",
-            border: "none",
-            borderRadius: 10,
-            background: "var(--accent)",
-            color: "#fff",
-            fontSize: 13,
-            fontWeight: 600,
-            letterSpacing: "0.08em",
-            cursor: "pointer",
-            textTransform: "uppercase",
-            transition: "opacity 0.15s, transform 0.15s",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.opacity = "0.9";
-            e.currentTarget.style.transform = "translateY(-1px)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.opacity = "1";
-            e.currentTarget.style.transform = "translateY(0)";
-          }}
+        <Tooltip
+          text={
+            numVariations === 1
+              ? "Create an AI-generated seamless wallpaper pattern"
+              : `Create ${numVariations} pattern options and pick your favorite`
+          }
+          position="bottom"
         >
-          {numVariations === 1
-            ? "Generate Pattern"
-            : `Generate ${numVariations} Variations`}
-        </button>
+          <button
+            onClick={handleGenerate}
+            style={{
+              width: "100%",
+              padding: "16px 20px",
+              border: "none",
+              borderRadius: 10,
+              background: "var(--accent)",
+              color: "#fff",
+              fontSize: 13,
+              fontWeight: 600,
+              letterSpacing: "0.08em",
+              cursor: "pointer",
+              textTransform: "uppercase",
+              transition: "opacity 0.15s, transform 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.opacity = "0.9";
+              e.currentTarget.style.transform = "translateY(-1px)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.opacity = "1";
+              e.currentTarget.style.transform = "translateY(0)";
+            }}
+          >
+            {numVariations === 1
+              ? "Generate Pattern"
+              : `Generate ${numVariations} Variations`}
+          </button>
+        </Tooltip>
       )}
 
       {/* ── Variant selection grid ─────────────────────────────── */}
@@ -755,8 +781,8 @@ export default function PatternGenerator({ onPatternGenerated, onDescriptionChan
             }}
           >
             {variants.map((img, i) => (
+              <Tooltip key={i} text={`Select variation ${i + 1} as your pattern`} position="bottom">
               <button
-                key={i}
                 type="button"
                 onClick={() => handleSelectVariant(img)}
                 style={{
@@ -810,6 +836,7 @@ export default function PatternGenerator({ onPatternGenerated, onDescriptionChan
                   Option {i + 1}
                 </div>
               </button>
+              </Tooltip>
             ))}
           </div>
         </div>
