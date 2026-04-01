@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { ProductTemplate } from "../types";
 import { saveProject, createThumbnail, SavedProject } from "../lib/storage";
 import PatternGenerator from "./PatternGenerator";
@@ -33,6 +33,19 @@ export default function PatternLab() {
   const [wallWidthFeet, setWallWidthFeet] = useState(10);
   const [wallHeightFeet, setWallHeightFeet] = useState(8);
   const [showWallPreview, setShowWallPreview] = useState(false);
+  const patternResultRef = useRef<HTMLDivElement>(null);
+  const shouldScrollRef = useRef(false);
+
+  // Scroll to pattern result when it appears
+  useEffect(() => {
+    if (patternImage && shouldScrollRef.current) {
+      shouldScrollRef.current = false;
+      // Small delay to let the DOM render the pattern section
+      setTimeout(() => {
+        patternResultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
+    }
+  }, [patternImage]);
 
   // Load project from sessionStorage (coming from /saved page)
   useEffect(() => {
@@ -74,6 +87,7 @@ export default function PatternLab() {
   }, []);
 
   const handleAIGenerated = useCallback((img: HTMLImageElement) => {
+    shouldScrollRef.current = true;
     setPatternImage(img);
     setPatternFileName("ai-generated-pattern.png");
     setOffsetX(0); setOffsetY(0); setScale(50); setRotation(0);
@@ -198,7 +212,7 @@ export default function PatternLab() {
 
         {/* Shared controls — shown when pattern exists */}
         {patternImage && (
-          <>
+          <div ref={patternResultRef}>
             {/* Pattern ready bar + save */}
             <div style={{
               padding: "16px 20px", marginBottom: 24,
@@ -362,7 +376,7 @@ export default function PatternLab() {
               offsetX={offsetX} offsetY={offsetY}
               fileName={downloadFileName} onFileNameChange={setDownloadFileName}
             />
-          </>
+          </div>
         )}
 
         {/* Legal */}
