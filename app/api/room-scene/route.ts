@@ -2,7 +2,16 @@ import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-export async function POST() {
+const FURNITURE_PROMPTS: Record<string, string> = {
+  couch:
+    "A modern mid-century 3-seat sofa, olive green fabric with warm wood legs, two small throw pillows (cream and mustard), viewed straight-on from the front. Photorealistic, studio lighting, isolated object on transparent background. No shadows on the ground.",
+  lamp:
+    "A tall modern brass floor lamp with a large cream linen drum shade, thin elegant stand, viewed straight-on. Photorealistic, studio lighting, isolated object on transparent background. The lamp is turned on with warm soft glow. No shadows on the ground.",
+  plant:
+    "A large fiddle leaf fig plant in a woven rattan basket planter, lush green leaves, about 4 feet tall, viewed straight-on. Photorealistic, studio lighting, isolated object on transparent background. No shadows on the ground.",
+};
+
+export async function POST(request: Request) {
   const apiKey = process.env.OPENAI_API_KEY;
 
   if (!apiKey) {
@@ -13,6 +22,15 @@ export async function POST() {
   }
 
   try {
+    const { item } = await request.json();
+
+    if (!item || !FURNITURE_PROMPTS[item]) {
+      return NextResponse.json(
+        { error: `Invalid item. Choose from: ${Object.keys(FURNITURE_PROMPTS).join(", ")}` },
+        { status: 400 }
+      );
+    }
+
     const response = await fetch("https://api.openai.com/v1/images/generations", {
       method: "POST",
       headers: {
@@ -21,10 +39,11 @@ export async function POST() {
       },
       body: JSON.stringify({
         model: "gpt-image-1",
-        prompt: `A front-facing photograph of a cozy living room interior. The back wall is a single flat SOLID PURE WHITE color (#FFFFFF), completely blank, no texture, no decoration, no shadows on the wall — just a perfectly uniform white rectangle. In front of the wall: a modern mid-century sofa with throw pillows, a round wooden coffee table with a small plant and books, a floor lamp to one side, and a potted fiddle leaf fig plant on the other side. Beautiful warm hardwood floor. Soft natural lighting from the left. The room feels warm and inviting. Photorealistic interior design photograph, editorial style. Camera angle: straight on, eye level, centered on the wall. The white wall must occupy the upper 65-70% of the image.`,
+        prompt: FURNITURE_PROMPTS[item],
         n: 1,
         size: "1024x1024",
-        quality: "high",
+        quality: "medium",
+        background: "transparent",
       }),
     });
 
@@ -38,7 +57,7 @@ export async function POST() {
 
     return NextResponse.json({ image: b64 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to generate room scene.";
+    const message = error instanceof Error ? error.message : "Failed to generate furniture.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -12,16 +12,20 @@ interface Props {
   onClose: () => void;
 }
 
-// Cache key for room scene in Supabase
-const ROOM_SCENE_KEY = "room_scene_v1";
+const FURNITURE_ITEMS = ["couch", "lamp", "plant"] as const;
+type FurnitureKey = (typeof FURNITURE_ITEMS)[number];
 
-// Load cached room scene from Supabase
-async function loadRoomScene(): Promise<string | null> {
+// ── Supabase cache helpers ──────────────────────────────────────────
+function cacheKey(item: FurnitureKey) {
+  return `furniture_v1_${item}`;
+}
+
+async function loadFurnitureFromDB(item: FurnitureKey): Promise<string | null> {
   try {
     const { data, error } = await supabase
       .from("trending_previews")
       .select("thumbnail_data_url")
-      .eq("id", ROOM_SCENE_KEY)
+      .eq("id", cacheKey(item))
       .single();
     if (error || !data) return null;
     return data.thumbnail_data_url;
@@ -30,74 +34,33 @@ async function loadRoomScene(): Promise<string | null> {
   }
 }
 
-// Save room scene to Supabase
-async function saveRoomScene(dataUrl: string) {
+async function saveFurnitureToDB(item: FurnitureKey, dataUrl: string) {
   try {
     await supabase.from("trending_previews").upsert(
       {
-        id: ROOM_SCENE_KEY,
-        pattern_id: "room_scene",
+        id: cacheKey(item),
+        pattern_id: `furniture_${item}`,
         month: "permanent",
         thumbnail_data_url: dataUrl,
       },
       { onConflict: "id" }
     );
   } catch {
-    // silent fail
+    // silent
   }
 }
 
-// Detect the white wall region in the room photo and return a mask
-function detectWallRegion(
-  roomImg: HTMLImageElement,
-  width: number,
-  height: number
-): { mask: ImageData; bounds: { top: number; bottom: number; left: number; right: number } } {
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d")!;
-  ctx.drawImage(roomImg, 0, 0, width, height);
-  const imageData = ctx.getImageData(0, 0, width, height);
-  const data = imageData.data;
-
-  // Create a mask: white/near-white pixels = wall
-  const mask = ctx.createImageData(width, height);
-  const threshold = 200; // pixels with R,G,B all above this are "wall"
-  let top = height,
-    bottom = 0,
-    left = width,
-    right = 0;
-
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const i = (y * width + x) * 4;
-      const r = data[i],
-        g = data[i + 1],
-        b = data[i + 2];
-      // Check if pixel is white/near-white (the blank wall)
-      const isWall = r > threshold && g > threshold && b > threshold && Math.abs(r - g) < 30 && Math.abs(r - b) < 30;
-      if (isWall) {
-        mask.data[i] = 255;
-        mask.data[i + 1] = 255;
-        mask.data[i + 2] = 255;
-        mask.data[i + 3] = 255;
-        if (y < top) top = y;
-        if (y > bottom) bottom = y;
-        if (x < left) left = x;
-        if (x > right) right = x;
-      } else {
-        mask.data[i] = 0;
-        mask.data[i + 1] = 0;
-        mask.data[i + 2] = 0;
-        mask.data[i + 3] = 0;
-      }
-    }
-  }
-
-  return { mask, bounds: { top, bottom, left, right } };
+// ── Load an image from a data URL ───────────────────────────────────
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
 }
 
+// ── Component ───────────────────────────────────────────────────────
 export default function WallPreviewModal({
   patternImage,
   wallWidthFeet,
@@ -107,223 +70,335 @@ export default function WallPreviewModal({
   onClose,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [roomImage, setRoomImage] = useState<HTMLImageElement | null>(null);
-  const [isLoadingRoom, setIsLoadingRoom] = useState(true);
-  const [loadingStatus, setLoadingStatus] = useState("Loading room scene...");
-  const [error, setError] = useState<string | null>(null);
+  const [furniture, setFurniture] = useState<Record<FurnitureKey, HTMLImageElement | null>>({
+    couch: null,
+    lamp: null,
+    plant: null,
+  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadingStatus, setLoadingStatus] = useState("Loading room...");
+  const [loadProgress, setLoadProgress] = useState(0);
+  const furnitureRef = useRef(furniture);
+  furnitureRef.current = furniture;
 
-  // Load or generate the room scene
+  // ── Load / generate all furniture pieces ──────────────────────────
   useEffect(() => {
     let cancelled = false;
 
-    async function loadOrGenerate() {
-      setIsLoadingRoom(true);
+    async function loadAll() {
+      setIsLoading(true);
+      const loaded: Partial<Record<FurnitureKey, HTMLImageElement>> = {};
+      let done = 0;
 
-      // Try loading from cache first
-      setLoadingStatus("Checking cached room...");
-      const cached = await loadRoomScene();
-      if (cached && !cancelled) {
-        const img = new Image();
-        img.onload = () => {
-          if (!cancelled) {
-            setRoomImage(img);
-            setIsLoadingRoom(false);
+      for (const item of FURNITURE_ITEMS) {
+        if (cancelled) return;
+
+        // Try cache first
+        setLoadingStatus(`Loading ${item}...`);
+        const cached = await loadFurnitureFromDB(item);
+        if (cached) {
+          try {
+            const img = await loadImage(cached);
+            loaded[item] = img;
+            done++;
+            setLoadProgress(done);
+            setFurniture((prev) => ({ ...prev, [item]: img }));
+            continue;
+          } catch {
+            // cache corrupt, regenerate
           }
-        };
-        img.onerror = () => {
-          if (!cancelled) generateFresh();
-        };
-        img.src = cached;
-        return;
+        }
+
+        // Generate fresh
+        setLoadingStatus(`Generating ${item} (one-time)...`);
+        try {
+          const res = await fetch("/api/room-scene", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ item }),
+          });
+          if (!res.ok) throw new Error(`Failed to generate ${item}`);
+          const data = await res.json();
+          if (!data.image) throw new Error("No image");
+
+          const dataUrl = `data:image/png;base64,${data.image}`;
+          saveFurnitureToDB(item, dataUrl);
+          const img = await loadImage(dataUrl);
+          loaded[item] = img;
+          done++;
+          setLoadProgress(done);
+          if (!cancelled) setFurniture((prev) => ({ ...prev, [item]: img }));
+        } catch {
+          done++;
+          setLoadProgress(done);
+          // skip this piece
+        }
       }
 
-      if (!cancelled) await generateFresh();
-    }
-
-    async function generateFresh() {
-      setLoadingStatus("Generating realistic room (one-time, ~15s)...");
-      try {
-        const res = await fetch("/api/room-scene", { method: "POST" });
-        if (!res.ok) throw new Error("Failed to generate room");
-        const data = await res.json();
-        if (!data.image) throw new Error("No image returned");
-
-        const dataUrl = `data:image/png;base64,${data.image}`;
-
-        // Cache it
-        saveRoomScene(dataUrl);
-
-        if (!cancelled) {
-          const img = new Image();
-          img.onload = () => {
-            if (!cancelled) {
-              setRoomImage(img);
-              setIsLoadingRoom(false);
-            }
-          };
-          img.src = dataUrl;
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to generate room");
-          setIsLoadingRoom(false);
-        }
+      if (!cancelled) {
+        setIsLoading(false);
       }
     }
 
-    loadOrGenerate();
-    return () => {
-      cancelled = true;
-    };
+    loadAll();
+    return () => { cancelled = true; };
   }, []);
 
-  // Draw the composite: pattern on wall + room photo on top
-  const drawComposite = useCallback(() => {
+  // ── Draw the layered scene ────────────────────────────────────────
+  const drawScene = useCallback(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !roomImage) return;
+    if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const canvasW = Math.min(window.innerWidth - 80, 900);
-    const canvasH = Math.min(window.innerHeight - 160, 700);
+    // Scene dimensions
+    const maxW = Math.min(window.innerWidth - 64, 920);
+    const maxH = Math.min(window.innerHeight - 180, 650);
 
-    // Keep room image aspect ratio (1:1 from API, but we'll letterbox)
-    const imgAspect = roomImage.width / roomImage.height;
-    let drawW: number, drawH: number;
-    if (imgAspect > canvasW / canvasH) {
-      drawW = canvasW;
-      drawH = Math.round(canvasW / imgAspect);
+    // Room proportions: wall is top ~68%, floor is bottom ~32%
+    const wallFraction = 0.68;
+    const roomAspect = 1.4; // wider than tall
+
+    let sceneW: number, sceneH: number;
+    if (roomAspect > maxW / maxH) {
+      sceneW = maxW;
+      sceneH = Math.round(maxW / roomAspect);
     } else {
-      drawH = canvasH;
-      drawW = Math.round(canvasH * imgAspect);
+      sceneH = maxH;
+      sceneW = Math.round(maxH * roomAspect);
     }
 
-    canvas.width = drawW;
-    canvas.height = drawH;
+    canvas.width = sceneW;
+    canvas.height = sceneH;
 
-    // Step 1: Detect wall region in room image
-    const { mask, bounds } = detectWallRegion(roomImage, drawW, drawH);
+    const wallH = Math.round(sceneH * wallFraction);
+    const floorH = sceneH - wallH;
 
-    // Step 2: Create a mask canvas for clipping
-    const maskCanvas = document.createElement("canvas");
-    maskCanvas.width = drawW;
-    maskCanvas.height = drawH;
-    const maskCtx = maskCanvas.getContext("2d")!;
-    maskCtx.putImageData(mask, 0, 0);
+    // ── Layer 1: Wallpaper tiled on the full wall area ──────────
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, sceneW, wallH);
+    ctx.clip();
 
-    // Step 3: Draw the tiled pattern onto the wall region
-    const wallW = bounds.right - bounds.left;
-    const wallH = bounds.bottom - bounds.top;
-    if (wallW > 0 && wallH > 0) {
-      // Create a pattern canvas for the wall area
-      const patternCanvas = document.createElement("canvas");
-      patternCanvas.width = drawW;
-      patternCanvas.height = drawH;
-      const patCtx = patternCanvas.getContext("2d")!;
+    // Background fill
+    ctx.fillStyle = "#f5f4f2";
+    ctx.fillRect(0, 0, sceneW, wallH);
 
-      // Tile the pattern across the detected wall area
-      const tileSizeFeet = 2;
-      const sf = scale / 100;
-      const tilesAcross = wallWidthFeet / tileSizeFeet;
-      const tilesDown = wallHeightFeet / tileSizeFeet;
-      const tileW = (wallW / tilesAcross) * sf;
-      const tileH = (wallH / tilesDown) * sf;
+    // Tile the pattern
+    const tileSizeFeet = 2;
+    const sf = scale / 100;
+    const tilesAcross = wallWidthFeet / tileSizeFeet;
+    const tilesDown = wallHeightFeet / tileSizeFeet;
+    const tileW = (sceneW / tilesAcross) * sf;
+    const tileH = (wallH / tilesDown) * sf;
 
-      if (tileW >= 1 && tileH >= 1) {
-        patCtx.save();
-        if (rotation !== 0) {
-          const cx = bounds.left + wallW / 2;
-          const cy = bounds.top + wallH / 2;
-          patCtx.translate(cx, cy);
-          patCtx.rotate((rotation * Math.PI) / 180);
-          patCtx.translate(-cx, -cy);
-        }
-
-        const extra = rotation !== 0 ? Math.ceil(Math.max(wallW, wallH) * 0.5) : 0;
-        for (let y = bounds.top - tileH - extra; y < bounds.bottom + extra; y += tileH) {
-          for (let x = bounds.left - tileW - extra; x < bounds.right + extra; x += tileW) {
-            patCtx.drawImage(patternImage, x, y, tileW, tileH);
-          }
-        }
-        patCtx.restore();
-      }
-
-      // Step 4: Use the mask to clip the pattern to just the wall area
-      // destination-in keeps pattern pixels only where mask is opaque
-      patCtx.globalCompositeOperation = "destination-in";
-      patCtx.drawImage(maskCanvas, 0, 0);
-      patCtx.globalCompositeOperation = "source-over";
-
-      // Step 5: Draw pattern layer onto main canvas
-      ctx.drawImage(patternCanvas, 0, 0);
-
-      // Step 6: Add subtle wall texture/depth to pattern area
+    if (tileW >= 1 && tileH >= 1) {
       ctx.save();
-      ctx.globalCompositeOperation = "multiply";
-      ctx.globalAlpha = 0.08;
-      // Slight vignette on pattern area
-      const grad = ctx.createRadialGradient(
-        bounds.left + wallW / 2,
-        bounds.top + wallH / 2,
-        Math.min(wallW, wallH) * 0.3,
-        bounds.left + wallW / 2,
-        bounds.top + wallH / 2,
-        Math.max(wallW, wallH) * 0.7
-      );
-      grad.addColorStop(0, "transparent");
-      grad.addColorStop(1, "rgba(0,0,0,0.3)");
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, drawW, drawH);
+      if (rotation !== 0) {
+        ctx.translate(sceneW / 2, wallH / 2);
+        ctx.rotate((rotation * Math.PI) / 180);
+        ctx.translate(-sceneW / 2, -wallH / 2);
+      }
+      const extra = rotation !== 0 ? Math.ceil(Math.max(sceneW, wallH) * 0.5) : 0;
+      for (let y = -tileH - extra; y < wallH + extra; y += tileH) {
+        for (let x = -tileW - extra; x < sceneW + extra; x += tileW) {
+          ctx.drawImage(patternImage, x, y, tileW, tileH);
+        }
+      }
       ctx.restore();
     }
 
-    // Step 7: Draw the room photo on top (furniture, floor, etc.)
-    // Use destination-over to draw room BEHIND existing pattern, or
-    // carefully composite to preserve furniture over pattern
-    ctx.save();
+    // Subtle wall depth vignette
+    const vignette = ctx.createRadialGradient(
+      sceneW / 2, wallH / 2, Math.min(sceneW, wallH) * 0.25,
+      sceneW / 2, wallH / 2, Math.max(sceneW, wallH) * 0.75
+    );
+    vignette.addColorStop(0, "rgba(0,0,0,0)");
+    vignette.addColorStop(1, "rgba(0,0,0,0.07)");
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, sceneW, wallH);
 
-    // Draw room image - but we want furniture ON TOP of pattern
-    // Strategy: draw room, but make white areas transparent
-    const roomOverlay = document.createElement("canvas");
-    roomOverlay.width = drawW;
-    roomOverlay.height = drawH;
-    const roomCtx = roomOverlay.getContext("2d")!;
-    roomCtx.drawImage(roomImage, 0, 0, drawW, drawH);
+    ctx.restore();
 
-    // Make white wall pixels transparent so pattern shows through
-    const roomData = roomCtx.getImageData(0, 0, drawW, drawH);
-    const rd = roomData.data;
-    const threshold = 200;
-    for (let i = 0; i < rd.length; i += 4) {
-      const r = rd[i], g = rd[i + 1], b = rd[i + 2];
-      const isWall = r > threshold && g > threshold && b > threshold && Math.abs(r - g) < 30 && Math.abs(r - b) < 30;
-      if (isWall) {
-        // Make transparent
-        rd[i + 3] = 0;
-      } else {
-        // Smooth edge transition - partially transparent for pixels near threshold
-        const minC = Math.min(r, g, b);
-        if (minC > threshold - 40) {
-          const fade = (minC - (threshold - 40)) / 40;
-          rd[i + 3] = Math.round(255 * (1 - fade * 0.8));
+    // ── Layer 2: Crown molding ──────────────────────────────────
+    const moldingH = Math.max(6, sceneH * 0.012);
+    // Crown shadow
+    ctx.fillStyle = "rgba(0,0,0,0.06)";
+    ctx.fillRect(0, 0, sceneW, moldingH + 2);
+    // Crown body
+    const crownGrad = ctx.createLinearGradient(0, 0, 0, moldingH);
+    crownGrad.addColorStop(0, "#e8e4de");
+    crownGrad.addColorStop(0.5, "#f5f2ec");
+    crownGrad.addColorStop(1, "#ddd9d2");
+    ctx.fillStyle = crownGrad;
+    ctx.fillRect(0, 0, sceneW, moldingH);
+
+    // ── Layer 3: Baseboard ──────────────────────────────────────
+    const baseH = Math.max(8, sceneH * 0.018);
+    const baseTop = wallH - baseH;
+    // Baseboard shadow
+    ctx.fillStyle = "rgba(0,0,0,0.05)";
+    ctx.fillRect(0, baseTop - 1, sceneW, baseH + 2);
+    // Baseboard body
+    const baseGrad = ctx.createLinearGradient(0, baseTop, 0, wallH);
+    baseGrad.addColorStop(0, "#f0ede6");
+    baseGrad.addColorStop(0.3, "#e8e4dc");
+    baseGrad.addColorStop(1, "#ddd8cf");
+    ctx.fillStyle = baseGrad;
+    ctx.fillRect(0, baseTop, sceneW, baseH);
+    // Baseboard top edge highlight
+    ctx.fillStyle = "rgba(255,255,255,0.4)";
+    ctx.fillRect(0, baseTop, sceneW, 1);
+
+    // ── Layer 4: Floor ──────────────────────────────────────────
+    const floorTop = wallH;
+
+    // Base floor color
+    const floorGrad = ctx.createLinearGradient(0, floorTop, 0, sceneH);
+    floorGrad.addColorStop(0, "#c4a882");
+    floorGrad.addColorStop(0.3, "#b89b76");
+    floorGrad.addColorStop(1, "#a88d68");
+    ctx.fillStyle = floorGrad;
+    ctx.fillRect(0, floorTop, sceneW, floorH);
+
+    // Hardwood plank lines
+    ctx.strokeStyle = "rgba(0,0,0,0.08)";
+    ctx.lineWidth = 1;
+    const plankW = sceneW * 0.12;
+    const plankRowH = floorH * 0.25;
+    for (let row = 0; row < 5; row++) {
+      const rowY = floorTop + row * plankRowH;
+      // Horizontal plank line
+      if (row > 0) {
+        ctx.beginPath();
+        ctx.moveTo(0, rowY);
+        ctx.lineTo(sceneW, rowY);
+        ctx.stroke();
+      }
+      // Vertical joints (staggered)
+      const offset = row % 2 === 0 ? 0 : plankW * 0.5;
+      for (let x = offset; x < sceneW; x += plankW) {
+        if (x > 0) {
+          ctx.beginPath();
+          ctx.moveTo(x, rowY);
+          ctx.lineTo(x, rowY + plankRowH);
+          ctx.stroke();
         }
       }
     }
-    roomCtx.putImageData(roomData, 0, 0);
 
-    // Draw room overlay (non-wall parts) on top
-    ctx.drawImage(roomOverlay, 0, 0);
+    // Floor light reflection
+    const floorShine = ctx.createLinearGradient(0, floorTop, 0, floorTop + floorH * 0.4);
+    floorShine.addColorStop(0, "rgba(255,255,255,0.1)");
+    floorShine.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = floorShine;
+    ctx.fillRect(0, floorTop, sceneW, floorH * 0.4);
+
+    // Shadow where wall meets floor
+    const wallFloorShadow = ctx.createLinearGradient(0, floorTop, 0, floorTop + 15);
+    wallFloorShadow.addColorStop(0, "rgba(0,0,0,0.12)");
+    wallFloorShadow.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = wallFloorShadow;
+    ctx.fillRect(0, floorTop, sceneW, 15);
+
+    // ── Layer 5: Furniture (transparent PNGs on top) ────────────
+    const f = furnitureRef.current;
+
+    // Couch: centered, sitting on the floor
+    if (f.couch) {
+      const couchW = sceneW * 0.48;
+      const couchH = couchW * (f.couch.height / f.couch.width);
+      const couchX = (sceneW - couchW) / 2;
+      const couchY = floorTop - couchH * 0.55; // overlap wall & floor
+
+      // Couch shadow on floor
+      ctx.save();
+      ctx.fillStyle = "rgba(0,0,0,0.1)";
+      ctx.beginPath();
+      ctx.ellipse(
+        couchX + couchW / 2, floorTop + floorH * 0.08,
+        couchW * 0.46, floorH * 0.06,
+        0, 0, Math.PI * 2
+      );
+      ctx.fill();
+      ctx.restore();
+
+      ctx.drawImage(f.couch, couchX, couchY, couchW, couchH);
+    }
+
+    // Lamp: left side
+    if (f.lamp) {
+      const lampH = sceneH * 0.52;
+      const lampW = lampH * (f.lamp.width / f.lamp.height);
+      const lampX = sceneW * 0.06;
+      const lampY = floorTop - lampH * 0.65;
+
+      // Lamp shadow
+      ctx.save();
+      ctx.fillStyle = "rgba(0,0,0,0.07)";
+      ctx.beginPath();
+      ctx.ellipse(
+        lampX + lampW / 2, floorTop + floorH * 0.06,
+        lampW * 0.4, floorH * 0.04,
+        0, 0, Math.PI * 2
+      );
+      ctx.fill();
+      ctx.restore();
+
+      // Warm light glow on wall behind lamp
+      ctx.save();
+      const glowGrad = ctx.createRadialGradient(
+        lampX + lampW / 2, wallH * 0.35,
+        0,
+        lampX + lampW / 2, wallH * 0.35,
+        sceneW * 0.2
+      );
+      glowGrad.addColorStop(0, "rgba(255,235,200,0.12)");
+      glowGrad.addColorStop(1, "rgba(255,235,200,0)");
+      ctx.fillStyle = glowGrad;
+      ctx.fillRect(0, 0, sceneW, wallH);
+      ctx.restore();
+
+      ctx.drawImage(f.lamp, lampX, lampY, lampW, lampH);
+    }
+
+    // Plant: right side
+    if (f.plant) {
+      const plantH = sceneH * 0.45;
+      const plantW = plantH * (f.plant.width / f.plant.height);
+      const plantX = sceneW - plantW - sceneW * 0.06;
+      const plantY = floorTop - plantH * 0.55;
+
+      // Plant shadow
+      ctx.save();
+      ctx.fillStyle = "rgba(0,0,0,0.08)";
+      ctx.beginPath();
+      ctx.ellipse(
+        plantX + plantW / 2, floorTop + floorH * 0.06,
+        plantW * 0.35, floorH * 0.04,
+        0, 0, Math.PI * 2
+      );
+      ctx.fill();
+      ctx.restore();
+
+      ctx.drawImage(f.plant, plantX, plantY, plantW, plantH);
+    }
+
+    // ── Layer 6: Subtle ambient lighting from top-left ──────────
+    ctx.save();
+    const ambient = ctx.createLinearGradient(0, 0, sceneW, sceneH);
+    ambient.addColorStop(0, "rgba(255,250,240,0.04)");
+    ambient.addColorStop(1, "rgba(0,0,0,0.04)");
+    ctx.fillStyle = ambient;
+    ctx.fillRect(0, 0, sceneW, sceneH);
     ctx.restore();
 
-    // Step 8: Subtle overall shadow/frame
-    ctx.strokeStyle = "rgba(0,0,0,0.1)";
-    ctx.lineWidth = 1;
-    ctx.strokeRect(0, 0, drawW, drawH);
-  }, [roomImage, patternImage, wallWidthFeet, wallHeightFeet, scale, rotation]);
+  }, [patternImage, wallWidthFeet, wallHeightFeet, scale, rotation, furniture]);
 
+  // Redraw when furniture loads or pattern changes
   useEffect(() => {
-    drawComposite();
-  }, [drawComposite]);
+    drawScene();
+  }, [drawScene]);
 
   // Close on Escape
   useEffect(() => {
@@ -341,7 +416,7 @@ export default function WallPreviewModal({
         position: "fixed",
         inset: 0,
         zIndex: 9999,
-        background: "rgba(0,0,0,0.75)",
+        background: "rgba(0,0,0,0.78)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -351,19 +426,19 @@ export default function WallPreviewModal({
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: "#1a1a1a",
-          maxWidth: 960,
+          background: "#1c1c1e",
+          maxWidth: 980,
           width: "100%",
-          maxHeight: "92vh",
+          maxHeight: "94vh",
           overflow: "auto",
           position: "relative",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          borderRadius: 8,
+          borderRadius: 10,
         }}
       >
-        {/* Close button */}
+        {/* Close */}
         <button
           onClick={onClose}
           style={{
@@ -373,7 +448,7 @@ export default function WallPreviewModal({
             background: "none",
             border: "none",
             fontSize: 24,
-            color: "rgba(255,255,255,0.6)",
+            color: "rgba(255,255,255,0.5)",
             cursor: "pointer",
             zIndex: 10,
             lineHeight: 1,
@@ -383,30 +458,25 @@ export default function WallPreviewModal({
         </button>
 
         {/* Title */}
-        <div style={{ padding: "20px 24px 16px", textAlign: "center", width: "100%" }}>
+        <div style={{ padding: "20px 24px 14px", textAlign: "center", width: "100%" }}>
           <p
             style={{
               fontSize: 10,
               fontWeight: 500,
               letterSpacing: "0.18em",
               textTransform: "uppercase",
-              color: "rgba(255,255,255,0.5)",
+              color: "rgba(255,255,255,0.45)",
               marginBottom: 6,
             }}
           >
             Room Preview
           </p>
-          <p
-            style={{
-              fontSize: 14,
-              color: "rgba(255,255,255,0.7)",
-            }}
-          >
+          <p style={{ fontSize: 14, color: "rgba(255,255,255,0.65)" }}>
             {wallWidthFeet}&prime; &times; {wallHeightFeet}&prime; wall
           </p>
         </div>
 
-        {/* Room scene */}
+        {/* Scene */}
         <div
           style={{
             position: "relative",
@@ -417,98 +487,62 @@ export default function WallPreviewModal({
             minHeight: 300,
           }}
         >
-          {isLoadingRoom ? (
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 16,
-                padding: "80px 0",
-              }}
-            >
+          <div
+            style={{
+              position: "relative",
+              borderRadius: 6,
+              overflow: "hidden",
+              boxShadow: "0 8px 40px rgba(0,0,0,0.5)",
+            }}
+          >
+            <canvas ref={canvasRef} style={{ display: "block", maxWidth: "100%" }} />
+
+            {/* Loading overlay */}
+            {isLoading && (
               <div
                 style={{
-                  width: 40,
-                  height: 40,
-                  border: "3px solid rgba(255,255,255,0.15)",
-                  borderTopColor: "rgba(255,255,255,0.7)",
-                  borderRadius: "50%",
-                  animation: "spin 1s linear infinite",
-                }}
-              />
-              <p
-                style={{
-                  fontSize: 13,
-                  color: "rgba(255,255,255,0.5)",
-                  letterSpacing: "0.05em",
+                  position: "absolute",
+                  inset: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 14,
+                  background: "rgba(28,28,30,0.85)",
+                  backdropFilter: "blur(4px)",
                 }}
               >
-                {loadingStatus}
-              </p>
-              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-            </div>
-          ) : error ? (
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 12,
-                padding: "60px 0",
-              }}
-            >
-              <p style={{ fontSize: 14, color: "rgba(255,200,200,0.8)" }}>{error}</p>
-              <button
-                onClick={() => {
-                  setError(null);
-                  setIsLoadingRoom(true);
-                  setLoadingStatus("Generating realistic room...");
-                  fetch("/api/room-scene", { method: "POST" })
-                    .then((r) => r.json())
-                    .then((data) => {
-                      if (!data.image) throw new Error("No image");
-                      const url = `data:image/png;base64,${data.image}`;
-                      saveRoomScene(url);
-                      const img = new Image();
-                      img.onload = () => {
-                        setRoomImage(img);
-                        setIsLoadingRoom(false);
-                      };
-                      img.src = url;
-                    })
-                    .catch((e) => {
-                      setError(e.message);
-                      setIsLoadingRoom(false);
-                    });
-                }}
-                style={{
-                  padding: "8px 20px",
-                  border: "1px solid rgba(255,255,255,0.3)",
-                  background: "transparent",
-                  color: "rgba(255,255,255,0.7)",
-                  fontSize: 12,
-                  cursor: "pointer",
-                  borderRadius: 4,
-                }}
-              >
-                Retry
-              </button>
-            </div>
-          ) : (
-            <div
-              style={{
-                position: "relative",
-                borderRadius: 4,
-                overflow: "hidden",
-                boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
-              }}
-            >
-              <canvas ref={canvasRef} style={{ display: "block", maxWidth: "100%" }} />
-            </div>
-          )}
+                <div
+                  style={{
+                    width: 36,
+                    height: 36,
+                    border: "3px solid rgba(255,255,255,0.12)",
+                    borderTopColor: "rgba(255,255,255,0.65)",
+                    borderRadius: "50%",
+                    animation: "spin 1s linear infinite",
+                  }}
+                />
+                <p
+                  style={{
+                    fontSize: 12,
+                    color: "rgba(255,255,255,0.5)",
+                    letterSpacing: "0.05em",
+                  }}
+                >
+                  {loadingStatus}
+                </p>
+                <p
+                  style={{
+                    fontSize: 11,
+                    color: "rgba(255,255,255,0.3)",
+                  }}
+                >
+                  {loadProgress} / {FURNITURE_ITEMS.length} pieces loaded
+                </p>
+                <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
