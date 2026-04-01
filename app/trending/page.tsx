@@ -10,6 +10,10 @@ interface ImageCache {
   [patternId: string]: string; // patternId -> thumbnail dataURL
 }
 
+interface FullImageCache {
+  [patternId: string]: string; // patternId -> full-res dataURL (session only)
+}
+
 // Load cached preview images from Supabase
 async function loadImageCacheFromDB(month: string): Promise<ImageCache> {
   try {
@@ -54,7 +58,7 @@ function createThumbnail(b64: string, width: number, height: number): Promise<st
       canvas.height = height;
       const ctx = canvas.getContext("2d")!;
       ctx.drawImage(img, 0, 0, width, height);
-      resolve(canvas.toDataURL("image/jpeg", 0.7));
+      resolve(canvas.toDataURL("image/jpeg", 0.92));
     };
     img.onerror = () => resolve("");
     img.src = `data:image/png;base64,${b64}`;
@@ -76,7 +80,7 @@ function TrendingCard({
   onSelect: (pattern: TrendingPattern) => void;
   cachedImage: string | null;
   cacheLoaded: boolean;
-  onImageLoaded: (id: string, thumbnail: string) => void;
+  onImageLoaded: (id: string, thumbnail: string, fullImage?: string) => void;
   autoLoad: boolean;
 }) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -107,10 +111,10 @@ function TrendingCard({
       if (data.image) {
         const fullUrl = `data:image/png;base64,${data.image}`;
         setImageUrl(fullUrl);
-        // Create a small thumbnail for caching
-        const thumb = await createThumbnail(data.image, 320, 200);
+        // Create a higher-quality thumbnail for display caching
+        const thumb = await createThumbnail(data.image, 640, 400);
         if (thumb) {
-          onImageLoaded(pattern.id, thumb);
+          onImageLoaded(pattern.id, thumb, fullUrl);
         }
       }
     } catch {
@@ -377,6 +381,7 @@ export default function TrendingPage() {
   const [isLive, setIsLive] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [imageCache, setImageCache] = useState<ImageCache>({});
+  const [fullImageCache, setFullImageCache] = useState<FullImageCache>({});
   const [cacheLoaded, setCacheLoaded] = useState(false);
   const [loadingIndex, setLoadingIndex] = useState(-1);
   const [isGeneratingAll, setIsGeneratingAll] = useState(false);
@@ -427,6 +432,7 @@ export default function TrendingPage() {
         localStorage.setItem("trending_cache", JSON.stringify(data));
         // Clear image cache for new patterns and auto-generate previews after render
         setImageCache({});
+        setFullImageCache({});
         setTimeout(() => {
           loadingRef.current = true;
           setIsGeneratingAll(true);
@@ -440,11 +446,14 @@ export default function TrendingPage() {
     }
   }, []);
 
-  const handleImageLoaded = useCallback((id: string, thumbnail: string) => {
+  const handleImageLoaded = useCallback((id: string, thumbnail: string, fullImage?: string) => {
     setImageCache((prev) => {
       const updated = { ...prev, [id]: thumbnail };
       return updated;
     });
+    if (fullImage) {
+      setFullImageCache((prev) => ({ ...prev, [id]: fullImage }));
+    }
     // Persist to Supabase
     savePreviewToDB(id, currentMonth, thumbnail);
   }, [currentMonth]);
@@ -468,8 +477,8 @@ export default function TrendingPage() {
 
   // When an image finishes loading, advance to next
   const handleImageLoadedAndAdvance = useCallback(
-    (id: string, thumbnail: string) => {
-      handleImageLoaded(id, thumbnail);
+    (id: string, thumbnail: string, fullImage?: string) => {
+      handleImageLoaded(id, thumbnail, fullImage);
       if (loadingRef.current) {
         setTimeout(() => advanceLoading(), 500);
       }
@@ -479,9 +488,12 @@ export default function TrendingPage() {
 
   const handleSelect = (pattern: TrendingPattern) => {
     sessionStorage.setItem("trending_prompt", pattern.prompt);
-    // If we have a cached image, pass it so the generator skips regeneration
+    // Prefer full-res image, fall back to thumbnail cache
+    const fullImg = fullImageCache[pattern.id];
     const cachedImg = imageCache[pattern.id];
-    if (cachedImg) {
+    if (fullImg) {
+      sessionStorage.setItem("trending_image", fullImg);
+    } else if (cachedImg) {
       sessionStorage.setItem("trending_image", cachedImg);
     }
     router.push("/");
