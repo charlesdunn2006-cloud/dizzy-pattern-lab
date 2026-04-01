@@ -87,30 +87,30 @@ export default function WallPreviewModal({
 
     async function loadAll() {
       setIsLoading(true);
-      const loaded: Partial<Record<FurnitureKey, HTMLImageElement>> = {};
       let done = 0;
 
-      for (const item of FURNITURE_ITEMS) {
+      // Load/generate all pieces in parallel for speed
+      const promises = FURNITURE_ITEMS.map(async (item) => {
         if (cancelled) return;
 
         // Try cache first
-        setLoadingStatus(`Loading ${item}...`);
         const cached = await loadFurnitureFromDB(item);
         if (cached) {
           try {
             const img = await loadImage(cached);
-            loaded[item] = img;
             done++;
-            setLoadProgress(done);
-            setFurniture((prev) => ({ ...prev, [item]: img }));
-            continue;
+            if (!cancelled) {
+              setLoadProgress(done);
+              setFurniture((prev) => ({ ...prev, [item]: img }));
+            }
+            return;
           } catch {
             // cache corrupt, regenerate
           }
         }
 
         // Generate fresh
-        setLoadingStatus(`Generating ${item} (one-time)...`);
+        if (!cancelled) setLoadingStatus(`Generating furniture (one-time)...`);
         try {
           const res = await fetch("/api/room-scene", {
             method: "POST",
@@ -124,16 +124,18 @@ export default function WallPreviewModal({
           const dataUrl = `data:image/png;base64,${data.image}`;
           saveFurnitureToDB(item, dataUrl);
           const img = await loadImage(dataUrl);
-          loaded[item] = img;
           done++;
-          setLoadProgress(done);
-          if (!cancelled) setFurniture((prev) => ({ ...prev, [item]: img }));
+          if (!cancelled) {
+            setLoadProgress(done);
+            setFurniture((prev) => ({ ...prev, [item]: img }));
+          }
         } catch {
           done++;
-          setLoadProgress(done);
-          // skip this piece
+          if (!cancelled) setLoadProgress(done);
         }
-      }
+      });
+
+      await Promise.all(promises);
 
       if (!cancelled) {
         setIsLoading(false);
@@ -199,10 +201,12 @@ export default function WallPreviewModal({
         ctx.rotate((rotation * Math.PI) / 180);
         ctx.translate(-sceneW / 2, -wallH / 2);
       }
+      // Add 0.5px overlap to eliminate sub-pixel gap lines between tiles
+      const overlap = 0.5;
       const extra = rotation !== 0 ? Math.ceil(Math.max(sceneW, wallH) * 0.5) : 0;
       for (let y = -tileH - extra; y < wallH + extra; y += tileH) {
         for (let x = -tileW - extra; x < sceneW + extra; x += tileW) {
-          ctx.drawImage(patternImage, x, y, tileW, tileH);
+          ctx.drawImage(patternImage, Math.round(x) - overlap, Math.round(y) - overlap, Math.ceil(tileW) + overlap * 2, Math.ceil(tileH) + overlap * 2);
         }
       }
       ctx.restore();

@@ -65,9 +65,10 @@ export default function PreviewCanvas({ patternImage, template, scale, rotation,
     const ox = (offsetX * previewScale) % tileW;
     const oy = (offsetY * previewScale) % tileH;
     const extra = rotation !== 0 ? Math.ceil(Math.max(canvasW, canvasH) * 0.5) : 0;
+    const overlap = 0.5;
     for (let y = -tileH - extra + oy; y < canvasH + extra; y += tileH)
       for (let x = -tileW - extra + ox; x < canvasW + extra; x += tileW)
-        ctx.drawImage(patternImage, x, y, tileW, tileH);
+        ctx.drawImage(patternImage, Math.round(x) - overlap, Math.round(y) - overlap, Math.ceil(tileW) + overlap * 2, Math.ceil(tileH) + overlap * 2);
     ctx.restore();
   }, [patternImage, template, scale, rotation, offsetX, offsetY]);
 

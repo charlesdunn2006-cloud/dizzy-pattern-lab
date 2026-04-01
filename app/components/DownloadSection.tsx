@@ -129,9 +129,10 @@ export default function DownloadSection({ patternImage, template, scale, rotatio
     const frs = targetW / (targetW * previewScale);
     const ox = (offsetX*frs)%tileW; const oy = (offsetY*frs)%tileH;
     const extra = rotation !== 0 ? Math.ceil(Math.max(targetW,targetH)*0.5) : 0;
+    const overlap = 0.5;
     for (let y = -tileH-extra+oy; y < targetH+extra; y += tileH)
       for (let x = -tileW-extra+ox; x < targetW+extra; x += tileW)
-        ctx.drawImage(patternImage, x, y, tileW, tileH);
+        ctx.drawImage(patternImage, Math.round(x)-overlap, Math.round(y)-overlap, Math.ceil(tileW)+overlap*2, Math.ceil(tileH)+overlap*2);
     ctx.restore();
     return canvas;
   }, [patternImage, template, scale, rotation, offsetX, offsetY]);
