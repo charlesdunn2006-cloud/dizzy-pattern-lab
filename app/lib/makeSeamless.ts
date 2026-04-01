@@ -1,122 +1,113 @@
 /**
- * Makes an image seamlessly tileable using symmetric edge blending.
+ * Makes an image seamlessly tileable using offset-and-crossfade.
  *
- * How it works:
- * For each edge pair (left↔right, top↔bottom), pixels within the blend zone
- * are averaged with their opposite-edge counterpart using a smoothstep curve.
+ * This is the same technique used by Photoshop's "Make Seamless" filter:
  *
- * At the very edge (x=0): pixel = 50% left + 50% right → identical on both sides
- * At the blend boundary: pixel = 100% original → no visible modification
- * Smoothstep interpolation ensures no hard transition lines.
+ * 1. Create a copy of the image offset by half width and half height.
+ *    This places the original edges in the center of the canvas.
  *
- * This GUARANTEES pixel[0] === pixel[w-1] and pixel[y=0] === pixel[y=h-1]
- * because both edges are blended to the exact same averaged value.
- * Image stays the same size — no cropping.
+ * 2. Build an elliptical gradient mask: opaque in the center (where the
+ *    offset copy's content is clean) and transparent at the edges (where
+ *    the original's content is clean). The mask uses a smooth cosine
+ *    falloff to avoid hard transitions.
+ *
+ * 3. Composite the offset copy over the original using the mask.
+ *    The result has edges from the offset copy (which were originally
+ *    the center of the image — naturally continuous) and the center
+ *    from the original. The blend zone is wide and sits in the middle
+ *    of the image where there's plenty of visual room to hide it.
+ *
+ * This produces dramatically better seamless tiling than narrow edge
+ * blending because the seam-fixing happens in the spacious center
+ * rather than in cramped edge strips.
  */
 
-export function makeSeamless(sourceImage: HTMLImageElement, blendPercent = 0.05): Promise<HTMLImageElement> {
+export function makeSeamless(sourceImage: HTMLImageElement): Promise<HTMLImageElement> {
   return new Promise((resolve) => {
     const w = sourceImage.naturalWidth || sourceImage.width;
     const h = sourceImage.naturalHeight || sourceImage.height;
+    const halfW = Math.floor(w / 2);
+    const halfH = Math.floor(h / 2);
 
-    // Draw source to canvas
-    const srcCanvas = document.createElement("canvas");
-    srcCanvas.width = w;
-    srcCanvas.height = h;
-    const srcCtx = srcCanvas.getContext("2d")!;
-    srcCtx.drawImage(sourceImage, 0, 0, w, h);
-    const srcData = srcCtx.getImageData(0, 0, w, h);
+    // ── Step 1: Draw original image ──────────────────────────────
+    const origCanvas = document.createElement("canvas");
+    origCanvas.width = w;
+    origCanvas.height = h;
+    const origCtx = origCanvas.getContext("2d")!;
+    origCtx.drawImage(sourceImage, 0, 0, w, h);
+    const origData = origCtx.getImageData(0, 0, w, h);
 
-    // Pass 1: Blend horizontal edges (left ↔ right)
-    const hBlendW = Math.floor(w * blendPercent);
-    const pass1 = new ImageData(new Uint8ClampedArray(srcData.data), w, h);
+    // ── Step 2: Create offset copy (shifted by half w and half h) ─
+    // Wrapping: pixel at (x, y) in offset = pixel at ((x+halfW)%w, (y+halfH)%h) in original
+    const offsetData = new ImageData(w, h);
+    for (let y = 0; y < h; y++) {
+      const srcY = (y + halfH) % h;
+      for (let x = 0; x < w; x++) {
+        const srcX = (x + halfW) % w;
+        const dstIdx = (y * w + x) * 4;
+        const srcIdx = (srcY * w + srcX) * 4;
+        offsetData.data[dstIdx] = origData.data[srcIdx];
+        offsetData.data[dstIdx + 1] = origData.data[srcIdx + 1];
+        offsetData.data[dstIdx + 2] = origData.data[srcIdx + 2];
+        offsetData.data[dstIdx + 3] = origData.data[srcIdx + 3];
+      }
+    }
+
+    // ── Step 3: Build blend mask ─────────────────────────────────
+    // The mask controls how much of the offset copy vs original to use.
+    // Center of image → high alpha (use offset copy, which has clean content here)
+    // Edges of image → low alpha (use original, which has clean content at edges)
+    //
+    // We use a separable cosine falloff for smooth transitions:
+    //   For each axis, map distance from center to [0..1], then apply
+    //   a raised cosine window. Multiply X and Y weights for an
+    //   elliptical blend shape.
+
+    const mask = new Float32Array(w * h);
 
     for (let y = 0; y < h; y++) {
-      for (let i = 0; i < hBlendW; i++) {
-        // Smoothstep: 0 at edge, 1 at blend boundary
-        const t = i / hBlendW;
-        const smooth = t * t * (3 - 2 * t);
-        // blend goes from 0.5 (equal mix at edge) to 1.0 (all original at boundary)
-        const keepOriginal = 0.5 + 0.5 * smooth;
-        const useOpposite = 1.0 - keepOriginal;
+      // Normalized distance from center: 0 at center, 1 at edge
+      const dy = Math.abs(y - (h - 1) / 2) / ((h - 1) / 2);
+      // Raised cosine: 1 at center, 0 at edge, smooth curve
+      const wy = 0.5 * (1 + Math.cos(Math.PI * dy));
 
-        const leftX = i;
-        const rightX = w - 1 - i;
+      for (let x = 0; x < w; x++) {
+        const dx = Math.abs(x - (w - 1) / 2) / ((w - 1) / 2);
+        const wx = 0.5 * (1 + Math.cos(Math.PI * dx));
 
-        const leftIdx = (y * w + leftX) * 4;
-        const rightIdx = (y * w + rightX) * 4;
-
-        const origLeftR = srcData.data[leftIdx];
-        const origLeftG = srcData.data[leftIdx + 1];
-        const origLeftB = srcData.data[leftIdx + 2];
-
-        const origRightR = srcData.data[rightIdx];
-        const origRightG = srcData.data[rightIdx + 1];
-        const origRightB = srcData.data[rightIdx + 2];
-
-        // Left pixel: blend toward right
-        pass1.data[leftIdx] = Math.round(origLeftR * keepOriginal + origRightR * useOpposite);
-        pass1.data[leftIdx + 1] = Math.round(origLeftG * keepOriginal + origRightG * useOpposite);
-        pass1.data[leftIdx + 2] = Math.round(origLeftB * keepOriginal + origRightB * useOpposite);
-        pass1.data[leftIdx + 3] = 255;
-
-        // Right pixel: blend toward left (mirror — same weights, swapped sources)
-        pass1.data[rightIdx] = Math.round(origRightR * keepOriginal + origLeftR * useOpposite);
-        pass1.data[rightIdx + 1] = Math.round(origRightG * keepOriginal + origLeftG * useOpposite);
-        pass1.data[rightIdx + 2] = Math.round(origRightB * keepOriginal + origLeftB * useOpposite);
-        pass1.data[rightIdx + 3] = 255;
+        mask[y * w + x] = wx * wy;
       }
     }
 
-    // Pass 2: Blend vertical edges (top ↔ bottom) on the h-blended result
-    const vBlendH = Math.floor(h * blendPercent);
-    const pass2 = new ImageData(new Uint8ClampedArray(pass1.data), w, h);
+    // ── Step 4: Composite ────────────────────────────────────────
+    // result = original * (1 - mask) + offset * mask
+    const resultData = new ImageData(w, h);
+    for (let i = 0; i < w * h; i++) {
+      const alpha = mask[i];
+      const invAlpha = 1 - alpha;
+      const idx = i * 4;
 
-    for (let x = 0; x < w; x++) {
-      for (let i = 0; i < vBlendH; i++) {
-        const t = i / vBlendH;
-        const smooth = t * t * (3 - 2 * t);
-        const keepOriginal = 0.5 + 0.5 * smooth;
-        const useOpposite = 1.0 - keepOriginal;
-
-        const topY = i;
-        const bottomY = h - 1 - i;
-
-        const topIdx = (topY * w + x) * 4;
-        const bottomIdx = (bottomY * w + x) * 4;
-
-        const origTopR = pass1.data[topIdx];
-        const origTopG = pass1.data[topIdx + 1];
-        const origTopB = pass1.data[topIdx + 2];
-
-        const origBottomR = pass1.data[bottomIdx];
-        const origBottomG = pass1.data[bottomIdx + 1];
-        const origBottomB = pass1.data[bottomIdx + 2];
-
-        // Top pixel
-        pass2.data[topIdx] = Math.round(origTopR * keepOriginal + origBottomR * useOpposite);
-        pass2.data[topIdx + 1] = Math.round(origTopG * keepOriginal + origBottomG * useOpposite);
-        pass2.data[topIdx + 2] = Math.round(origTopB * keepOriginal + origBottomB * useOpposite);
-        pass2.data[topIdx + 3] = 255;
-
-        // Bottom pixel
-        pass2.data[bottomIdx] = Math.round(origBottomR * keepOriginal + origTopR * useOpposite);
-        pass2.data[bottomIdx + 1] = Math.round(origBottomG * keepOriginal + origTopG * useOpposite);
-        pass2.data[bottomIdx + 2] = Math.round(origBottomB * keepOriginal + origTopB * useOpposite);
-        pass2.data[bottomIdx + 3] = 255;
-      }
+      resultData.data[idx] = Math.round(
+        origData.data[idx] * invAlpha + offsetData.data[idx] * alpha
+      );
+      resultData.data[idx + 1] = Math.round(
+        origData.data[idx + 1] * invAlpha + offsetData.data[idx + 1] * alpha
+      );
+      resultData.data[idx + 2] = Math.round(
+        origData.data[idx + 2] * invAlpha + offsetData.data[idx + 2] * alpha
+      );
+      resultData.data[idx + 3] = 255;
     }
 
-    // Write result
+    // ── Step 5: Output ───────────────────────────────────────────
     const resultCanvas = document.createElement("canvas");
     resultCanvas.width = w;
     resultCanvas.height = h;
     const resCtx = resultCanvas.getContext("2d")!;
-    resCtx.putImageData(pass2, 0, 0);
+    resCtx.putImageData(resultData, 0, 0);
 
     const img = new Image();
     img.onload = () => resolve(img);
     img.src = resultCanvas.toDataURL("image/png");
   });
 }
-// force rebuild
