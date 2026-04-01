@@ -1,22 +1,16 @@
 /**
- * Makes an image seamlessly tileable using single-pass 2D edge blending.
+ * Makes an image seamlessly tileable using single-pass edge-to-edge blending.
  *
- * Improvements over the original 5% two-pass approach:
+ * When tiling, the seam occurs where x=0 meets x=w-1 (and y=0 meets y=h-1).
+ * To fix it, we blend pixels near the left edge with their counterpart near
+ * the right edge, and pixels near the top with their counterpart near the
+ * bottom. Both edges converge to the same averaged value at the seam line.
  *
- * 1. WIDER BLEND ZONE (25%) — On a 1024px image, this blends ~256px on
- *    each edge instead of ~51px, giving much more room to hide transitions.
- *
- * 2. SINGLE-PASS 2D MASK — Instead of blending horizontal then vertical
- *    (which double-blends corners and creates muddy patches), we compute
- *    a single 2D weight for every pixel. The weight is based on its distance
- *    from the nearest edge using a cosine falloff, and we blend with the
- *    wrap-around counterpart pixel in one pass.
- *
- * 3. COSINE INTERPOLATION — Smoother than smoothstep, zero-derivative
- *    at both ends so the transition is invisible.
- *
- * The center of the image is untouched (weight = 0, no blending).
- * Only pixels near edges get blended with their wrap-around counterparts.
+ * Key improvements over the original 5% two-pass approach:
+ * - 15% blend zone (~154px on 1024) instead of 5% (~51px)
+ * - Single pass with 2D weight mask — corners handled correctly
+ * - Cosine interpolation for invisible transition boundaries
+ * - Center of image is completely untouched
  */
 
 export function makeSeamless(sourceImage: HTMLImageElement): Promise<HTMLImageElement> {
@@ -32,70 +26,118 @@ export function makeSeamless(sourceImage: HTMLImageElement): Promise<HTMLImageEl
     srcCtx.drawImage(sourceImage, 0, 0, w, h);
     const src = srcCtx.getImageData(0, 0, w, h);
 
-    // Blend zone: 25% of each dimension from each edge
-    const blendFrac = 0.25;
+    // Blend zone: 15% of each dimension from each edge
+    const blendFrac = 0.15;
     const blendW = Math.floor(w * blendFrac);
     const blendH = Math.floor(h * blendFrac);
 
-    // Build 1D weight arrays for each axis.
-    // Weight = 1 at edge (full blend with opposite side), 0 outside blend zone.
+    // Build 1D weight arrays: how much to blend with opposite edge.
+    // 1 at the very edge (pixel 0 / pixel w-1) → 0 at blend boundary.
     // Cosine falloff for smooth transition.
     const xWeight = new Float32Array(w);
-    for (let x = 0; x < w; x++) {
-      const distFromEdge = Math.min(x, w - 1 - x);
-      if (distFromEdge < blendW) {
-        // Cosine: 1 at edge → 0 at blend boundary
-        const t = distFromEdge / blendW; // 0 at edge, 1 at boundary
-        xWeight[x] = 0.5 * (1 + Math.cos(Math.PI * t)); // 1 → 0
-      }
-      // else 0 (default)
+    for (let x = 0; x < blendW; x++) {
+      const t = x / blendW; // 0 at edge, 1 at boundary
+      const weight = 0.5 * (1 + Math.cos(Math.PI * t)); // 1 → 0
+      xWeight[x] = weight;          // left edge
+      xWeight[w - 1 - x] = weight;  // right edge
     }
 
     const yWeight = new Float32Array(h);
-    for (let y = 0; y < h; y++) {
-      const distFromEdge = Math.min(y, h - 1 - y);
-      if (distFromEdge < blendH) {
-        const t = distFromEdge / blendH;
-        yWeight[y] = 0.5 * (1 + Math.cos(Math.PI * t));
-      }
+    for (let y = 0; y < blendH; y++) {
+      const t = y / blendH;
+      const weight = 0.5 * (1 + Math.cos(Math.PI * t));
+      yWeight[y] = weight;          // top edge
+      yWeight[h - 1 - y] = weight;  // bottom edge
     }
 
-    // Single-pass blend.
-    // For each pixel, compute a 2D blend weight from the x and y weights.
-    // Then blend with the wrap-around counterpart:
-    //   wrap pixel for (x,y) = ((x + w/2) % w, (y + h/2) % h)
-    //
-    // We use max(xWeight, yWeight) rather than multiply to avoid
-    // under-blending corners. Corners need the MOST blending (they're
-    // near two edges), so taking the max ensures they get enough.
-    const halfW = Math.floor(w / 2);
-    const halfH = Math.floor(h / 2);
-
+    // Result starts as a copy of the original
     const result = new ImageData(new Uint8ClampedArray(src.data), w, h);
+
+    // For each pixel near an edge, blend with the opposite-edge counterpart.
+    //
+    // Horizontal seam fix: pixel at x blends with pixel at (w - 1 - x)
+    //   At x=0: 50/50 mix with x=w-1 → both edges become identical
+    //   At x=blendW: 100% original → no modification
+    //
+    // Vertical seam fix: pixel at y blends with pixel at (h - 1 - y)
+    //   Same logic for top↔bottom
+    //
+    // For corners (both xWeight and yWeight > 0), we combine both blends:
+    //   We compute the horizontal blend and vertical blend independently,
+    //   then combine using the 2D weight = 1 - (1-xw)*(1-yw) which ensures
+    //   corners get enough blending without double-blending artifacts.
 
     for (let y = 0; y < h; y++) {
       const yw = yWeight[y];
-      const wrapY = (y + halfH) % h;
+      const mirrorY = h - 1 - y;
 
       for (let x = 0; x < w; x++) {
         const xw = xWeight[x];
-        if (xw === 0 && yw === 0) continue; // center — skip
+        if (xw === 0 && yw === 0) continue; // center pixel — skip
 
-        // Combine: use max so corners get strong blending
-        const blend = Math.max(xw, yw);
-        // Scale down to 50% max blend strength to preserve pattern detail
-        // At the very edge pixel, blend = 1, so actual mix = 0.5 (50/50 with opposite)
-        const alpha = blend * 0.5;
-        const keep = 1 - alpha;
-
-        const wrapX = (x + halfW) % w;
-
+        const mirrorX = w - 1 - x;
         const idx = (y * w + x) * 4;
-        const wrapIdx = (wrapY * w + wrapX) * 4;
 
-        result.data[idx] = Math.round(src.data[idx] * keep + src.data[wrapIdx] * alpha);
-        result.data[idx + 1] = Math.round(src.data[idx + 1] * keep + src.data[wrapIdx + 1] * alpha);
-        result.data[idx + 2] = Math.round(src.data[idx + 2] * keep + src.data[wrapIdx + 2] * alpha);
+        // Get original pixel
+        const origR = src.data[idx];
+        const origG = src.data[idx + 1];
+        const origB = src.data[idx + 2];
+
+        let blendedR = origR;
+        let blendedG = origG;
+        let blendedB = origB;
+
+        if (xw > 0 && yw === 0) {
+          // Only near a horizontal edge — blend left↔right
+          const oppIdx = (y * w + mirrorX) * 4;
+          const alpha = xw * 0.5; // max 50% blend at the seam
+          blendedR = Math.round(origR * (1 - alpha) + src.data[oppIdx] * alpha);
+          blendedG = Math.round(origG * (1 - alpha) + src.data[oppIdx + 1] * alpha);
+          blendedB = Math.round(origB * (1 - alpha) + src.data[oppIdx + 2] * alpha);
+        } else if (yw > 0 && xw === 0) {
+          // Only near a vertical edge — blend top↔bottom
+          const oppIdx = (mirrorY * w + x) * 4;
+          const alpha = yw * 0.5;
+          blendedR = Math.round(origR * (1 - alpha) + src.data[oppIdx] * alpha);
+          blendedG = Math.round(origG * (1 - alpha) + src.data[oppIdx + 1] * alpha);
+          blendedB = Math.round(origB * (1 - alpha) + src.data[oppIdx + 2] * alpha);
+        } else {
+          // Corner region: both edges need blending
+          // Blend with horizontal opposite
+          const hOppIdx = (y * w + mirrorX) * 4;
+          const hAlpha = xw * 0.5;
+          const hR = origR * (1 - hAlpha) + src.data[hOppIdx] * hAlpha;
+          const hG = origG * (1 - hAlpha) + src.data[hOppIdx + 1] * hAlpha;
+          const hB = origB * (1 - hAlpha) + src.data[hOppIdx + 2] * hAlpha;
+
+          // Blend with vertical opposite
+          const vOppIdx = (mirrorY * w + x) * 4;
+          const vAlpha = yw * 0.5;
+          const vR = origR * (1 - vAlpha) + src.data[vOppIdx] * vAlpha;
+          const vG = origG * (1 - vAlpha) + src.data[vOppIdx + 1] * vAlpha;
+          const vB = origB * (1 - vAlpha) + src.data[vOppIdx + 2] * vAlpha;
+
+          // Also blend with the diagonal opposite (corner counterpart)
+          const dOppIdx = (mirrorY * w + mirrorX) * 4;
+          const dAlpha = Math.min(xw, yw) * 0.5;
+          const dR = origR * (1 - dAlpha) + src.data[dOppIdx] * dAlpha;
+          const dG = origG * (1 - dAlpha) + src.data[dOppIdx + 1] * dAlpha;
+          const dB = origB * (1 - dAlpha) + src.data[dOppIdx + 2] * dAlpha;
+
+          // Weighted average of the three blend directions
+          const totalW = xw + yw + Math.min(xw, yw);
+          const wH = xw / totalW;
+          const wV = yw / totalW;
+          const wD = Math.min(xw, yw) / totalW;
+
+          blendedR = Math.round(hR * wH + vR * wV + dR * wD);
+          blendedG = Math.round(hG * wH + vG * wV + dG * wD);
+          blendedB = Math.round(hB * wH + vB * wV + dB * wD);
+        }
+
+        result.data[idx] = blendedR;
+        result.data[idx + 1] = blendedG;
+        result.data[idx + 2] = blendedB;
         result.data[idx + 3] = 255;
       }
     }
