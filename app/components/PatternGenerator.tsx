@@ -147,6 +147,8 @@ export default function PatternGenerator({ onPatternGenerated, onDescriptionChan
   const [style, setStyle] = useState("any");
   const [colorMood, setColorMood] = useState("any");
   const [complexity, setComplexity] = useState("any");
+  const [numVariations, setNumVariations] = useState(1);
+  const [variants, setVariants] = useState<HTMLImageElement[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const suggestionsRef = useRef<HTMLDivElement>(null);
@@ -219,6 +221,12 @@ export default function PatternGenerator({ onPatternGenerated, onDescriptionChan
     return () => clearInterval(interval);
   }, [isGenerating]);
 
+  const handleSelectVariant = useCallback(async (img: HTMLImageElement) => {
+    const seamlessImg = await makeSeamless(img);
+    onPatternGenerated(seamlessImg);
+    setVariants([]);
+  }, [onPatternGenerated]);
+
   const handleGenerate = useCallback(async () => {
     if (!description.trim()) {
       setError("Please describe your pattern first.");
@@ -227,43 +235,67 @@ export default function PatternGenerator({ onPatternGenerated, onDescriptionChan
     setError("");
     setIsGenerating(true);
     setProgress(0);
+    setVariants([]);
+
+    const body = {
+      description: description.trim(),
+      style: style !== "any" ? style : undefined,
+      colorMood: colorMood !== "any" ? colorMood : undefined,
+      complexity: complexity !== "any" ? complexity : undefined,
+    };
 
     try {
-      const response = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          description: description.trim(),
-          style: style !== "any" ? style : undefined,
-          colorMood: colorMood !== "any" ? colorMood : undefined,
-          complexity: complexity !== "any" ? complexity : undefined,
-        }),
-      });
+      // Fire N parallel requests
+      const fetches = Array.from({ length: numVariations }, () =>
+        fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        })
+      );
 
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err?.error || `Server error: ${response.status}`);
+      const responses = await Promise.all(fetches);
+
+      // Parse all responses
+      const results: string[] = [];
+      for (const resp of responses) {
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          throw new Error(err?.error || `Server error: ${resp.status}`);
+        }
+        const data = await resp.json();
+        results.push(data.image);
       }
 
       setProgress(95);
-      const data = await response.json();
-      const img = new Image();
-      img.onload = async () => {
-        setProgress(100);
-        const seamlessImg = await makeSeamless(img);
+
+      // Load all images
+      const loadImage = (b64: string): Promise<HTMLImageElement> =>
+        new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => reject(new Error("Failed to load image"));
+          img.src = `data:image/png;base64,${b64}`;
+        });
+
+      const images = await Promise.all(results.map(loadImage));
+      setProgress(100);
+
+      if (images.length === 1) {
+        // Single variation — apply directly
+        const seamlessImg = await makeSeamless(images[0]);
         onPatternGenerated(seamlessImg);
         setIsGenerating(false);
-      };
-      img.onerror = () => {
-        setError("Failed to load generated image.");
+      } else {
+        // Multiple variations — show picker
+        setVariants(images);
         setIsGenerating(false);
-      };
-      img.src = `data:image/png;base64,${data.image}`;
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate pattern.");
       setIsGenerating(false);
     }
-  }, [description, style, colorMood, complexity, onPatternGenerated]);
+  }, [description, style, colorMood, complexity, numVariations, onPatternGenerated]);
 
   return (
     <div style={{ marginBottom: 36 }}>
@@ -560,6 +592,59 @@ export default function PatternGenerator({ onPatternGenerated, onDescriptionChan
         </div>
       )}
 
+      {/* ── Variations picker ──────────────────────────────────── */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          marginBottom: 16,
+        }}
+      >
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 500,
+            letterSpacing: "0.14em",
+            textTransform: "uppercase",
+            color: "var(--text-muted)",
+          }}
+        >
+          Variations
+        </span>
+        <div style={{ display: "flex", gap: 4 }}>
+          {[1, 2, 3].map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => setNumVariations(n)}
+              style={{
+                width: 36,
+                height: 32,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 13,
+                fontWeight: 600,
+                borderRadius: 8,
+                border: `1.5px solid ${numVariations === n ? "var(--accent)" : "var(--border)"}`,
+                background: numVariations === n ? "var(--accent)" : "transparent",
+                color: numVariations === n ? "#fff" : "var(--text-secondary)",
+                cursor: "pointer",
+                transition: "all 0.15s",
+              }}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
+        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+          {numVariations === 1
+            ? "pattern"
+            : `patterns — pick your favorite`}
+        </span>
+      </div>
+
       {/* ── Generate button + progress ──────────────────────────── */}
       {isGenerating ? (
         <div
@@ -589,7 +674,9 @@ export default function PatternGenerator({ onPatternGenerated, onDescriptionChan
               marginBottom: 16,
             }}
           >
-            This usually takes 10–20 seconds
+            {numVariations === 1
+              ? "This usually takes 10–20 seconds"
+              : `Generating ${numVariations} variations — this may take a bit longer`}
           </div>
           {/* Progress bar */}
           <div
@@ -638,8 +725,94 @@ export default function PatternGenerator({ onPatternGenerated, onDescriptionChan
             e.currentTarget.style.transform = "translateY(0)";
           }}
         >
-          Generate Pattern
+          {numVariations === 1
+            ? "Generate Pattern"
+            : `Generate ${numVariations} Variations`}
         </button>
+      )}
+
+      {/* ── Variant selection grid ─────────────────────────────── */}
+      {variants.length > 1 && (
+        <div style={{ marginTop: 24 }}>
+          <div
+            style={{
+              fontSize: 10,
+              fontWeight: 500,
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              color: "var(--text-muted)",
+              marginBottom: 12,
+              textAlign: "center",
+            }}
+          >
+            Pick your favorite variation
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: `repeat(${variants.length}, 1fr)`,
+              gap: 12,
+            }}
+          >
+            {variants.map((img, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => handleSelectVariant(img)}
+                style={{
+                  position: "relative",
+                  border: "2px solid var(--border)",
+                  borderRadius: 10,
+                  overflow: "hidden",
+                  cursor: "pointer",
+                  padding: 0,
+                  background: "var(--bg-card)",
+                  transition: "all 0.2s",
+                  aspectRatio: "1",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = "var(--accent)";
+                  e.currentTarget.style.transform = "translateY(-2px)";
+                  e.currentTarget.style.boxShadow = "0 6px 20px rgba(0,0,0,0.1)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = "var(--border)";
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "none";
+                }}
+              >
+                <img
+                  src={img.src}
+                  alt={`Variation ${i + 1}`}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    display: "block",
+                  }}
+                />
+                <div
+                  style={{
+                    position: "absolute",
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    padding: "8px",
+                    background: "linear-gradient(transparent, rgba(0,0,0,0.5))",
+                    color: "#fff",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    textAlign: "center",
+                  }}
+                >
+                  Option {i + 1}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );

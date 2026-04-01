@@ -87,7 +87,7 @@ export async function GET() {
           },
           {
             role: "user",
-            content: `It is ${currentMonth}. Generate exactly 15 trending wallpaper pattern ideas that would be popular right now. Consider seasonal trends, current interior design movements, social media trends (Pinterest, Instagram), and popular color palettes.
+            content: `It is ${currentMonth}. Generate exactly 9 trending wallpaper pattern ideas that would be popular right now. Consider seasonal trends, current interior design movements, social media trends (Pinterest, Instagram), and popular color palettes.
 
 For each pattern, provide:
 1. title: A catchy name (2-4 words)
@@ -123,7 +123,7 @@ No markdown, no explanation, just the JSON array.`
     }
 
     // Build trending items with categories and colors
-    const trending: TrendingItem[] = parsed.slice(0, 15).map((item, index) => {
+    const trending: TrendingItem[] = parsed.slice(0, 9).map((item, index) => {
       const { category, colors } = getCategoryColors(item.title, item.description);
       return {
         id: `trend-${Date.now()}-${index}`,
