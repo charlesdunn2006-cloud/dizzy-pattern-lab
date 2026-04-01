@@ -45,12 +45,12 @@ export default function PreviewCanvas({ patternImage, template, scale, rotation,
     canvas.style.width = `${canvasW}px`; canvas.style.height = `${canvasH}px`;
 
     // Light checkerboard
-    ctx.fillStyle = "#f5f4f2";
+    ctx.fillStyle = "#EDE8E3";
     ctx.fillRect(0, 0, canvasW, canvasH);
     const cs = 8;
     for (let y = 0; y < canvasH; y += cs) {
       for (let x = 0; x < canvasW; x += cs) {
-        ctx.fillStyle = ((x / cs + y / cs) % 2) === 0 ? "#f0efed" : "#e8e7e4";
+        ctx.fillStyle = ((x / cs + y / cs) % 2) === 0 ? "#F3EEEA" : "#EDE8E3";
         ctx.fillRect(x, y, cs, cs);
       }
     }

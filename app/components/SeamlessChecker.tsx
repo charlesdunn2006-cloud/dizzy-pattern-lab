@@ -281,7 +281,7 @@ export default function SeamlessChecker({ patternImage, scale, rotation }: Props
                 fontWeight: 700,
                 color: getScoreColor(result.score),
                 lineHeight: 1,
-                fontFamily: "'Cormorant Garamond', Georgia, serif",
+                fontFamily: "'Playfair Display', Georgia, serif",
               }}>
                 {result.score}
               </span>

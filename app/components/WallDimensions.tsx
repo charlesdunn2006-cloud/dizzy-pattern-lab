@@ -162,7 +162,7 @@ export default function WallDimensions({ wallWidth, wallHeight, onWallSizeChange
           Tiles Needed
         </p>
         <p style={{ fontSize: 20, fontWeight: 500, color: "var(--text-primary)", marginBottom: 4,
-          fontFamily: "'Cormorant Garamond', Georgia, serif",
+          fontFamily: "'Playfair Display', Georgia, serif",
         }}>
           {tiles.tilesX} &times; {tiles.tilesY} tiles ({tiles.total} total)
         </p>

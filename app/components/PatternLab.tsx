@@ -145,7 +145,7 @@ export default function PatternLab() {
           <h1 style={{
             fontSize: 36, fontWeight: 500, color: "var(--text-primary)",
             marginBottom: 14, lineHeight: 1.2,
-            fontFamily: "'Cormorant Garamond', Georgia, serif",
+            fontFamily: "'Playfair Display', Georgia, serif",
           }}>
             AI Pattern Generator
           </h1>

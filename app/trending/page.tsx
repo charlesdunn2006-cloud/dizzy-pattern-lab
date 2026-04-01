@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { TRENDING_PATTERNS, getCurrentMonth, TrendingPattern } from "./data";
 import PatternPreview from "./PatternPreview";
 import { supabase } from "../lib/supabase";
+import Header from "../components/Header";
 
 interface ImageCache {
   [patternId: string]: string; // patternId -> thumbnail dataURL
@@ -138,12 +139,14 @@ function TrendingCard({
       style={{
         textAlign: "left",
         border: "1px solid var(--border)",
+        borderRadius: 10,
         background: "#ffffff",
         cursor: "pointer",
         padding: 0,
         transition: "all 0.2s",
         display: "flex",
         flexDirection: "column",
+        overflow: "hidden",
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.borderColor = "var(--accent)";
@@ -163,7 +166,7 @@ function TrendingCard({
           height: 200,
           overflow: "hidden",
           position: "relative",
-          background: "#f5f5f0",
+          background: "#F3EEEA",
         }}
       >
         {imageUrl ? (
@@ -245,7 +248,7 @@ function TrendingCard({
             style={{
               width: "100%",
               height: "100%",
-              background: "#f5f5f0",
+              background: "#F3EEEA",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -308,7 +311,7 @@ function TrendingCard({
             color: "var(--text-primary)",
             marginBottom: 6,
             lineHeight: 1.3,
-            fontFamily: "'Cormorant Garamond', Georgia, serif",
+            fontFamily: "'Playfair Display', Georgia, serif",
           }}
         >
           {pattern.title}
@@ -522,82 +525,7 @@ export default function TrendingPage() {
         }
       `}</style>
 
-      {/* Header */}
-      <header
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          padding: "24px 24px 0",
-          background: "#FFF8F0",
-          borderBottom: "1px solid var(--border)",
-        }}
-      >
-        <a
-          href="/"
-          style={{
-            fontFamily: "'Cormorant Garamond', Georgia, serif",
-            fontSize: 28,
-            fontWeight: 600,
-            color: "var(--text-primary)",
-            letterSpacing: "0.04em",
-            textDecoration: "none",
-            marginBottom: 6,
-          }}
-        >
-          Dizzy with Excitement
-        </a>
-        <p
-          style={{
-            fontSize: 11,
-            fontWeight: 500,
-            letterSpacing: "0.15em",
-            color: "var(--text-muted)",
-            marginBottom: 16,
-            textTransform: "uppercase",
-          }}
-        >
-          AI Pattern Generator
-        </p>
-        <nav style={{ display: "flex", gap: 32, paddingBottom: 16 }}>
-          <a
-            href="/"
-            style={{
-              color: "var(--text-secondary)",
-              textDecoration: "none",
-              fontSize: 12,
-              fontWeight: 500,
-              letterSpacing: "0.12em",
-            }}
-          >
-            GENERATOR
-          </a>
-          <span
-            style={{
-              color: "var(--text-primary)",
-              fontSize: 12,
-              fontWeight: 500,
-              letterSpacing: "0.12em",
-              borderBottom: "2px solid var(--text-primary)",
-              paddingBottom: 2,
-            }}
-          >
-            TRENDING {new Date().getFullYear()}
-          </span>
-          <a
-            href="/saved"
-            style={{
-              color: "var(--text-secondary)",
-              textDecoration: "none",
-              fontSize: 12,
-              fontWeight: 500,
-              letterSpacing: "0.12em",
-            }}
-          >
-            SAVED
-          </a>
-        </nav>
-      </header>
+      <Header />
 
       <main style={{ maxWidth: 960, margin: "0 auto", padding: "48px 24px 100px" }}>
         {/* Title */}
@@ -621,7 +549,7 @@ export default function TrendingPage() {
               color: "var(--text-primary)",
               marginBottom: 14,
               lineHeight: 1.2,
-              fontFamily: "'Cormorant Garamond', Georgia, serif",
+              fontFamily: "'Playfair Display', Georgia, serif",
             }}
           >
             Trending Wallpapers
@@ -645,6 +573,7 @@ export default function TrendingPage() {
                 display: "inline-block",
                 marginTop: 10,
                 padding: "4px 12px",
+                borderRadius: 20,
                 background: "var(--accent)",
                 color: "#fff",
                 fontSize: 10,
@@ -666,6 +595,7 @@ export default function TrendingPage() {
             style={{
               padding: "10px 24px",
               border: "none",
+              borderRadius: 6,
               background: (isLoading || isGeneratingAll) ? "var(--bg-card)" : "var(--accent)",
               color: (isLoading || isGeneratingAll) ? "var(--text-muted)" : "#fff",
               fontSize: 12,
@@ -687,6 +617,7 @@ export default function TrendingPage() {
               style={{
                 padding: "10px 24px",
                 border: "2px solid var(--accent)",
+                borderRadius: 6,
                 background: "transparent",
                 color: "var(--accent)",
                 fontSize: 12,

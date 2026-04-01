@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { SavedProject, getSavedProjects, deleteProject } from "../lib/storage";
+import Header from "../components/Header";
 
 export default function SavedPage() {
   const router = useRouter();
@@ -36,47 +37,7 @@ export default function SavedPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg-primary)" }}>
-      {/* Header */}
-      <header style={{
-        display: "flex", flexDirection: "column", alignItems: "center",
-        padding: "24px 24px 0", background: "#FFF8F0",
-        borderBottom: "1px solid var(--border)",
-      }}>
-        <a href="/" style={{
-          fontFamily: "'Cormorant Garamond', Georgia, serif",
-          fontSize: 28, fontWeight: 600, color: "var(--text-primary)",
-          letterSpacing: "0.04em", textDecoration: "none", marginBottom: 6,
-        }}>
-          Dizzy with Excitement
-        </a>
-        <p style={{
-          fontSize: 11, fontWeight: 500, letterSpacing: "0.15em",
-          color: "var(--text-muted)", marginBottom: 16, textTransform: "uppercase",
-        }}>
-          AI Pattern Generator
-        </p>
-        <nav style={{ display: "flex", gap: 32, paddingBottom: 16 }}>
-          <a href="/" style={{
-            color: "var(--text-secondary)", textDecoration: "none",
-            fontSize: 12, fontWeight: 500, letterSpacing: "0.12em",
-          }}>
-            GENERATOR
-          </a>
-          <a href="/trending" style={{
-            color: "var(--text-secondary)", textDecoration: "none",
-            fontSize: 12, fontWeight: 500, letterSpacing: "0.12em",
-          }}>
-            TRENDING {new Date().getFullYear()}
-          </a>
-          <span style={{
-            color: "var(--text-primary)", fontSize: 12, fontWeight: 500,
-            letterSpacing: "0.12em", borderBottom: "2px solid var(--text-primary)",
-            paddingBottom: 2,
-          }}>
-            SAVED
-          </span>
-        </nav>
-      </header>
+      <Header />
 
       <main style={{ maxWidth: 960, margin: "0 auto", padding: "48px 24px 100px" }}>
         {/* Title */}
@@ -84,7 +45,7 @@ export default function SavedPage() {
           <h1 style={{
             fontSize: 36, fontWeight: 500, color: "var(--text-primary)",
             marginBottom: 14, lineHeight: 1.2,
-            fontFamily: "'Cormorant Garamond', Georgia, serif",
+            fontFamily: "'Playfair Display', Georgia, serif",
           }}>
             Saved Projects
           </h1>
@@ -107,7 +68,7 @@ export default function SavedPage() {
             border: "1px dashed var(--border)",
           }}>
             <p style={{
-              fontFamily: "'Cormorant Garamond', Georgia, serif",
+              fontFamily: "'Playfair Display', Georgia, serif",
               fontSize: 22, fontWeight: 500, color: "var(--text-secondary)",
               marginBottom: 12,
             }}>
@@ -136,9 +97,11 @@ export default function SavedPage() {
                 key={project.id}
                 style={{
                   border: "1px solid var(--border)",
+                  borderRadius: 10,
                   background: "#ffffff",
                   display: "flex", flexDirection: "column",
                   transition: "all 0.2s",
+                  overflow: "hidden",
                 }}
               >
                 {/* Thumbnail */}
@@ -177,7 +140,7 @@ export default function SavedPage() {
                     <h3 style={{
                       fontSize: 18, fontWeight: 500, color: "var(--text-primary)",
                       lineHeight: 1.3,
-                      fontFamily: "'Cormorant Garamond', Georgia, serif",
+                      fontFamily: "'Playfair Display', Georgia, serif",
                     }}>
                       {project.name}
                     </h3>

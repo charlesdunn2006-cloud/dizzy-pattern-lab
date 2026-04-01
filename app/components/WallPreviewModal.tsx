@@ -183,7 +183,7 @@ export default function WallPreviewModal({
     ctx.clip();
 
     // Background fill
-    ctx.fillStyle = "#f5f4f2";
+    ctx.fillStyle = "#F3EEEA";
     ctx.fillRect(0, 0, sceneW, wallH);
 
     // Tile the pattern

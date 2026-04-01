@@ -59,7 +59,7 @@ export default function FileUpload({ onUpload, onClear, hasFile, fileName }: Pro
       <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/tiff"
         onChange={(e) => { const f = e.target.files?.[0]; if (f) processFile(f); }}
         style={{ display: "none" }} />
-      <p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500, color: "var(--text-primary)", marginBottom: 8 }}>
+      <p style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, fontWeight: 500, color: "var(--text-primary)", marginBottom: 8 }}>
         Drop your seamless pattern here
       </p>
       <p style={{ color: "var(--text-muted)", fontSize: 13, letterSpacing: "0.02em" }}>
