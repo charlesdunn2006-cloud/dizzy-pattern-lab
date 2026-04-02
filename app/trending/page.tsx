@@ -403,9 +403,12 @@ export default function TrendingPage() {
     if (cached) {
       try {
         const data = JSON.parse(cached);
-        if (data.month === currentMonth && data.patterns?.length > 0) {
+        if (data.month === currentMonth && data.patterns?.length > 0 && data.patterns.length <= 9) {
           setPatterns(data.patterns);
           setIsLive(true);
+        } else {
+          // Stale cache (wrong count or old month) — clear it
+          localStorage.removeItem("trending_cache");
         }
       } catch {
         /* use static fallback */
