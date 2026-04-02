@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import Tooltip from "./Tooltip";
 
 function LogoMark() {
   return (
@@ -15,9 +16,9 @@ function LogoMark() {
 }
 
 const NAV_ITEMS = [
-  { href: "/", label: "Generator" },
-  { href: "/trending", label: `Trending` },
-  { href: "/saved", label: "Saved" },
+  { href: "/", label: "Generator", tooltip: "Create wallpaper patterns with AI or upload your own" },
+  { href: "/trending", label: "Trending", tooltip: "Browse this month's most popular wallpaper styles" },
+  { href: "/saved", label: "Saved", tooltip: "View your saved pattern projects" },
 ];
 
 export default function Header() {
@@ -69,34 +70,35 @@ export default function Header() {
           const isActive =
             item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           return (
-            <a
-              key={item.href}
-              href={item.href}
-              style={{
-                color: isActive ? "var(--text-primary)" : "var(--text-muted)",
-                textDecoration: "none",
-                fontSize: 13,
-                fontWeight: 500,
-                padding: "8px 16px",
-                borderRadius: 6,
-                background: isActive ? "var(--bg-warm)" : "transparent",
-                transition: "all 0.2s",
-              }}
-              onMouseEnter={(e) => {
-                if (!isActive) {
-                  e.currentTarget.style.color = "var(--text-primary)";
-                  e.currentTarget.style.background = "var(--bg-secondary)";
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive) {
-                  e.currentTarget.style.color = "var(--text-muted)";
-                  e.currentTarget.style.background = "transparent";
-                }
-              }}
-            >
-              {item.label}
-            </a>
+            <Tooltip key={item.href} text={item.tooltip} position="bottom">
+              <a
+                href={item.href}
+                style={{
+                  color: isActive ? "var(--text-primary)" : "var(--text-muted)",
+                  textDecoration: "none",
+                  fontSize: 13,
+                  fontWeight: 500,
+                  padding: "8px 16px",
+                  borderRadius: 6,
+                  background: isActive ? "var(--bg-warm)" : "transparent",
+                  transition: "all 0.2s",
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.color = "var(--text-primary)";
+                    e.currentTarget.style.background = "var(--bg-secondary)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.color = "var(--text-muted)";
+                    e.currentTarget.style.background = "transparent";
+                  }
+                }}
+              >
+                {item.label}
+              </a>
+            </Tooltip>
           );
         })}
       </nav>
